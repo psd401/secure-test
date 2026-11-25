@@ -420,7 +420,7 @@ function assignmentMaxOf(push: { last_result: Record<string, unknown> | null } |
 }
 
 /** B1 D3: the Send again note when the test's maximum moved since the assignment was created. */
-export function maxChangedNote(createdMax: number, nowMax: number): string {
+function maxChangedNote(createdMax: number, nowMax: number): string {
   const fmt = (n: number) => String(Math.round(n * 100) / 100);
   return `This test is now worth ${fmt(nowMax)} points, but the PowerTeacher Pro assignment was created out of ${fmt(createdMax)}. Change the assignment's points in PowerTeacher Pro to match.`;
 }

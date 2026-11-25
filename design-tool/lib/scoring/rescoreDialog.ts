@@ -43,9 +43,10 @@ export function questionLine(q: RescoreQuestionCount): string {
   const changes = q.changed > 0 ? `${plural(q.changed, "answer changes", "answers change")}` : "";
   const kept =
     q.kept > 0 ? `${plural(q.kept, "score you set stays", "scores you set stay")}` : "";
+  const rescaledCount = q.rescaled ?? 0;
   const rescaled =
-    (q.rescaled ?? 0) > 0
-      ? `${plural(q.rescaled!, "score you set moves", "scores you set move")} to the new points`
+    rescaledCount > 0
+      ? `${plural(rescaledCount, "score you set moves", "scores you set move")} to the new points`
       : "";
   return `Q${q.position + 1} — ${[changes, rescaled, kept].filter(Boolean).join(" · ")}`;
 }
@@ -55,9 +56,10 @@ export function dryRunSummary(dry: RescoreDryRun): string {
   if (dry.students_changed === 0) return RESCORE_NOTHING_TITLE + ".";
   const lead = `Rescoring changes ${plural(dry.students_changed, "student's score", "students' scores")} with the current answer keys and points.`;
   // B1 D2: a score a teacher (or an approved AI) set keeps its fraction.
+  const rescaledCount = dry.rescaled ?? 0;
   const rescaled =
-    (dry.rescaled ?? 0) > 0
-      ? ` ${plural(dry.rescaled!, "score you set keeps", "scores you set keep")} the same share of the new points (3 of 4 becomes 6 of 8).`
+    rescaledCount > 0
+      ? ` ${plural(rescaledCount, "score you set keeps", "scores you set keep")} the same share of the new points (3 of 4 becomes 6 of 8).`
       : "";
   const kept =
     dry.kept > 0

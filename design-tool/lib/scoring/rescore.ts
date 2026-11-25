@@ -153,9 +153,9 @@ export function planRescore(
     const final = finalByResponse.get(response.id) ?? null;
     // B1 D2: a non-auto final on a question whose maximum moved keeps its
     // fraction on the new maximum, whatever the question's method.
-    const anyItem = itemById.get(response.item_id);
-    if (anyItem && final && final.method !== "auto" && final.max_points > 0) {
-      const max = itemMaxPoints(anyItem);
+    const question = itemById.get(response.item_id);
+    if (question && final && final.method !== "auto" && final.max_points > 0) {
+      const max = itemMaxPoints(question);
       if (final.max_points !== max) {
         const scaled = applyWeight(final.points, final.max_points, max);
         plan.rescaled++;
@@ -168,7 +168,7 @@ export function planRescore(
           points: scaled.points,
           max_points: scaled.max_points,
         });
-        bump(anyItem.id, "rescaled");
+        bump(question.id, "rescaled");
         studentsChanged.add(response.attempt_id);
         continue;
       }

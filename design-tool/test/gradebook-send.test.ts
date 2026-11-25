@@ -36,7 +36,7 @@ import { loadSendDialogSections } from "../lib/gradebook/sendDialogData";
 import { buildResults } from "../lib/scoring/results";
 import { passBackAttempt } from "../lib/api/passBackAttempt";
 import { defaultMockCategories, mockPowerSchool } from "../lib/gradebook/powerschool";
-import { maxChangedNote, todayPacific } from "../lib/gradebook/sendPowerSchool";
+import { todayPacific } from "../lib/gradebook/sendPowerSchool";
 import { setLogSink } from "../lib/log";
 import {
   BIOLOGY_STUDENT,
@@ -498,13 +498,12 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     // Q1 is now worth 3: the test is worth 4, the assignment still says 2.
     await getDb().update(items).set({ points: 3 }).where(eq(items.id, s.items[0]!.id));
     body = await (await send(s.assessment.id, BASE_BODY)).json();
-    expect(body.notes).toContain(maxChangedNote(2, 4));
+    const note =
+      "This test is now worth 4 points, but the PowerTeacher Pro assignment was created out of 2. Change the assignment's points in PowerTeacher Pro to match.";
+    expect(body.notes).toContain(note);
     // The created max is kept, so the note repeats until it matches again.
     body = await (await send(s.assessment.id, BASE_BODY)).json();
-    expect(body.notes).toContain(maxChangedNote(2, 4));
-    expect(maxChangedNote(2, 4)).toBe(
-      "This test is now worth 4 points, but the PowerTeacher Pro assignment was created out of 2. Change the assignment's points in PowerTeacher Pro to match.",
-    );
+    expect(body.notes).toContain(note);
   });
 
   test("a student with no DCID is held back no_dcid; the due date defaults to today (PT)", async () => {
