@@ -4,13 +4,8 @@ import { getDb } from "@/db/client";
 import { responses, items, scores } from "@/db/schema";
 import type { SessionPayload } from "@/lib/auth/session";
 import { authorizeAttempt } from "@/lib/api/access";
-import {
-  rubricMaxPoints,
-  scoringView,
-  validateAgainstRubric,
-} from "@/lib/ai/essayScorer/scoreCore";
-import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
-import { graphMaxPoints } from "@secure-test/graphing/server";
+import { scoringView, validateAgainstRubric } from "@/lib/ai/essayScorer/scoreCore";
+import { entryMaxPoints } from "@/lib/scoring/results";
 import { NO_SCORE_REASONS } from "@/lib/scoring/competencyResult";
 
 // Slice 39: shared plumbing for the review actions (manual score, approve,
@@ -146,15 +141,9 @@ export function checkManualScore(
   if (body.no_score_reason && (!opts.competency || !rubric)) {
     return { ok: false, status: 400, body: { ok: false, error: "no_score_not_allowed" } };
   }
-  const expectedMax = rubric
-    ? rubricMaxPoints(rubric)
-    : item.type === "table"
-      ? tableMaxPoints(item.config)
-      : item.type === "fill_blank"
-        ? fillBlankMaxPoints(item.config)
-        : item.type === "graph" && item.config.graph_board && item.config.graph_key
-          ? graphMaxPoints(item.config.graph_board, item.config.graph_key)
-          : 1;
+  // B1: the rubric max on a rubric item (the write scales it, scaleEntry),
+  // else the item's weighted max — one rule with the review queue.
+  const expectedMax = entryMaxPoints(item);
   if (body.max_points !== expectedMax) {
     return {
       ok: false,

@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import { assessments, item_sets, items, responses } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { isAnswerKeyOnlyPatch, requireDraftStatus } from "@/lib/api/requireDraft";
-import { itemConfigForWrite, parseItemBody, wantsEmptyStem } from "@/lib/api/items";
+import { itemConfigForWrite, parseItemBody, pointsNotAllowedResponse, wantsEmptyStem } from "@/lib/api/items";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
@@ -44,6 +44,7 @@ async function loadItemInAssessment(
     ok: true as const,
     item,
     parentStatus: access.assessment.status,
+    competency: access.assessment.competency_pass_min_points != null,
   };
 }
 
@@ -119,6 +120,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     );
   }
 
+  // B1 D6: no point weights on a competency assessment.
+  if (body.points != null && owned.competency) return pointsNotAllowedResponse();
+
   // Rubric library slice 3: an item may point at a rubric in the caller's
   // OWN library only.
   const rubricGuard = await rejectUnownedRubricId(
@@ -152,6 +156,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
         // BG slice 2: omitted = keep the stored tags (a key-only PATCH from an
         // older caller must not wipe them); an array replaces them.
         ...(body.standards !== undefined ? { standards: body.standards } : {}),
+        // B1: omitted = keep the stored weight; null = back to the natural max.
+        ...(body.points !== undefined ? { points: body.points } : {}),
         updated_at: new Date(),
       })
       .where(eq(items.id, itemId))

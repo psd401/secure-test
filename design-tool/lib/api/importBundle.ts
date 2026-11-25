@@ -11,7 +11,7 @@ import {
   type ItemType, item_sets } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
 import { assertNever } from "@/lib/assertNever";
-import { ALLOWED_SCORING_METHODS, compactBlanks, graphIssues, isShortAnswerRubric } from "@/lib/api/items";
+import { ALLOWED_SCORING_METHODS, PointsField, compactBlanks, graphIssues, isShortAnswerRubric } from "@/lib/api/items";
 import { SOURCE_ITEM_TYPES } from "@/lib/api/itemSets";
 import { isAllowedImageMime } from "@/lib/api/uploads";
 import { getStorageProvider } from "@/lib/storage/provider";
@@ -428,6 +428,8 @@ function importItemValues(
     // BG slice 2: tags as the bundle carries them (the wire schema
     // already capped them); a code this catalog lacks stays as text.
     standards: normalizeStandards(it.standards ?? []),
+    // B1: kept only inside D5 (PointsField); anything else = natural max.
+    points: PointsField.safeParse(it.points).success ? (it.points as number) : null,
   };
   if (it.type === "multiple_choice_single") {
     return {

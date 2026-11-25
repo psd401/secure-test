@@ -54,7 +54,7 @@ export interface FeedbackSettings {
 
 export type FeedbackItemInput = Pick<
   ItemRow,
-  "id" | "position" | "type" | "choices" | "correct_choice_ids" | "correct_answer" | "config"
+  "id" | "position" | "type" | "choices" | "correct_choice_ids" | "correct_answer" | "config" | "points"
 > & {
   /** FB slice 3: a fill_blank's blanks are numbered by their markers' order. */
   stem?: string;

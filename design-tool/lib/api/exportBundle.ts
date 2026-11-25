@@ -91,6 +91,9 @@ export async function buildExportBundle(
     const scoring = {
       ...(row.config?.scoring_method ? { scoring_method: row.config.scoring_method } : {}),
       ...(tags.length > 0 ? { standards: tags } : {}),
+      // B1: the teacher's weight, only when set (Duplicate and Share copy
+      // through this bundle, so they keep it).
+      ...(row.points != null ? { points: row.points } : {}),
       // Graphing calculator (D-7): any type; only when set.
       ...(row.config?.no_calculator ? { no_calculator: true as const } : {}),
       // Stimulus graph (D-8): any type; only when present.

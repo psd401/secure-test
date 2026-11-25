@@ -21,14 +21,14 @@ import { resolveSourceText } from "@/lib/api/setSources";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import { essayRichHtml, renderEssayAnswerHtml } from "@/lib/richText/renderEssayAnswer";
 import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
-import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
-import { fillBlankMaxPoints, tableMaxPoints, fillBlankHandScored } from "@/lib/scoring/auto";
+import { entryMaxPoints } from "@/lib/scoring/results";
+import { fillBlankHandScored } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
 import { inStudentOption, optionByStudent } from "@/lib/competency/studentItems";
 import { authorizeAssessment, levelSatisfies } from "@/lib/api/access";
 import { aiBatchCounts } from "@/lib/scoring/aiBatch";
 import { alertsForResponses } from "@/lib/safeguarding/alertQueries";
-import { graphAnswerLines, graphMaxPoints, type GraphObject } from "@secure-test/graphing/server";
+import { graphAnswerLines, type GraphObject } from "@secure-test/graphing/server";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -300,15 +300,8 @@ export async function GET(req: Request, ctx: RouteContext) {
         // E3 slice 2: what the manual score route will accept as max_points
         // — the rubric max, a table's cells, else 1 — so the queue's points
         // field asks for the right denominator.
-        max_points: item.config.rubric
-          ? rubricMaxPoints(item.config.rubric)
-          : item.type === "table"
-            ? tableMaxPoints(item.config)
-            : item.type === "fill_blank"
-              ? fillBlankMaxPoints(item.config)
-              : item.type === "graph" && item.config.graph_board && item.config.graph_key
-                ? graphMaxPoints(item.config.graph_board, item.config.graph_key)
-                : 1,
+        // B1: entryMaxPoints, the same rule checkManualScore holds it to.
+        max_points: entryMaxPoints(item),
         // E3 slice 2: the grid and its keys, so the hand-scorer sees the
         // student's cells laid out and the expected text beside each keyed
         // one. Teacher-only surface — keys are fine here.

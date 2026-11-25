@@ -28,6 +28,7 @@ import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
 import { planRescore } from "@/lib/scoring/rescore";
 import { inStudentOption, optionByStudent } from "@/lib/competency/studentItems";
 import { graphMaxPoints } from "@secure-test/graphing/server";
+import { applyWeight } from "@/lib/scoring/weight";
 
 // Slice 40: the teacher results matrix — submitted attempts × items, with
 // FINAL scores only. Proposed AI scores are deliberately excluded from
@@ -179,7 +180,45 @@ export function sectionFilterOptions(results: Pick<AssessmentResults, "rows" | "
  * fill_blank, else 1.
  * Exported for R1: the item-analytics footer and the per-student page divide
  * by the same constant this file sums into `max_points`. */
-export function itemMaxPoints(item: Pick<ItemRow, "type" | "config">): number {
+export function itemMaxPoints(
+  item: Pick<ItemRow, "type" | "config"> & { points: number | null },
+): number {
+  // B1 (docs/point-weighting-design.md): the teacher's weight wins; NULL =
+  // natural max. `points` is required so a caller that selects a narrow
+  // column set fails typecheck instead of silently disagreeing with the
+  // stored (weighted) scores.
+  return item.points ?? naturalMaxPoints(item);
+}
+
+/**
+ * B1: the maximum a teacher ENTERS a hand score against — the rubric max on a
+ * rubric item (criterion picks are in rubric points; the write scales them,
+ * `scaleRubricTotal`), else the weighted item max. The manual-score check and
+ * the review queue both read this, so they cannot drift apart again.
+ */
+export function entryMaxPoints(
+  item: Pick<ItemRow, "type" | "config"> & { points: number | null },
+): number {
+  return item.config.rubric ? rubricMaxPoints(item.config.rubric) : itemMaxPoints(item);
+}
+
+/**
+ * B1 (D1): a score entered against `entryMaxPoints` as the score row to
+ * store. A rubric total is scaled to the item's weight (criterion scores stay
+ * in rubric points); anything else was already entered on the item's weight.
+ */
+export function scaleEntry(
+  item: Pick<ItemRow, "config"> & { points: number | null },
+  points: number,
+  maxPoints: number,
+): { points: number; max_points: number } {
+  return item.config.rubric
+    ? applyWeight(points, maxPoints, item.points)
+    : { points, max_points: maxPoints };
+}
+
+/** B1: an item's maximum before any teacher weight — the D-R1 rule above. */
+export function naturalMaxPoints(item: Pick<ItemRow, "type" | "config">): number {
   if (item.config.rubric) return rubricMaxPoints(item.config.rubric);
   if (item.type === "table") return tableMaxPoints(item.config);
   // FB slice 1: one point per keyed blank (D-2), every blank when keyless.

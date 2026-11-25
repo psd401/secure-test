@@ -444,6 +444,26 @@ describe("local scoring against the editor's key", () => {
     expect(score.max).toBe(3);
   });
 
+  test("B1: a weighted question scores on its weight, as the graded final does", () => {
+    const items = [
+      view("w", "multiple_choice_single", {
+        position: 0,
+        choices: [{ id: "c1", text: "1" }, { id: "c2", text: "2" }],
+        correct_choice_ids: ["c2"],
+        points: 5,
+      }),
+      view("u", "short_text", { position: 1, correct_answer: "x" }),
+    ];
+    const score = scorePreview(
+      items,
+      { w: { type: "multiple_choice_single", choice_id: "c2" }, u: { type: "short_text", text: "nope" } },
+      createPreviewSealer(),
+    );
+    expect(score.rows[0]).toMatchObject({ outcome: "correct", points: 5, max: 5 });
+    expect(score.points).toBe(5);
+    expect(score.max).toBe(6);
+  });
+
   test("a match or order answer naming ids this sealer never minted counts as unanswered", () => {
     const items = keyedFixtures().filter((i) => i.type === "match" || i.type === "order");
     const sealer = createPreviewSealer();

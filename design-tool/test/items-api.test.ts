@@ -1894,3 +1894,107 @@ describe("essay show_word_count (U-22)", () => {
     expect(rows[1]?.config.show_word_count).toBe(true);
   });
 });
+
+// B1 point weighting, slice 1 (docs/point-weighting-design.md): the item
+// routes store `points` (D5 range), refuse it on a competency assessment
+// (D6), let it through the publish lock (D7), and the teacher bundle carries
+// it (so Duplicate and Share keep it).
+describe("B1 — item points", () => {
+  async function publishB1(aid: string) {
+    const { PATCH } = await import("../app/api/assessments/[id]/route");
+    const res = await PATCH(
+      new Request(`http://localhost/api/assessments/${aid}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "published" }),
+      }),
+      { params: Promise.resolve({ id: aid }) },
+    );
+    expect(res.status).toBe(200);
+  }
+
+  test("POST stores points; omitted = null (natural max)", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("points");
+    const set = await createItem(aid, { ...SAMPLE_MC, points: 2.5 });
+    expect(set.status).toBe(201);
+    expect(((await set.json()) as { item: { points: number } }).item.points).toBe(2.5);
+    const none = await createItem(aid, SAMPLE_MC);
+    expect(((await none.json()) as { item: { points: number | null } }).item.points).toBeNull();
+  });
+
+  test("D5: 0, negative, >100 and a third decimal are refused", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("points range");
+    for (const points of [0, -1, 100.5, 1.234]) {
+      const res = await createItem(aid, { ...SAMPLE_MC, points });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  test("PATCH: omitted keeps, null clears, a number sets", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("points patch");
+    const created = (await (await createItem(aid, { ...SAMPLE_MC, points: 3 })).json()) as {
+      item: { id: string };
+    };
+    const id = created.item.id;
+    const read = async () =>
+      (await getDb().select({ p: items.points }).from(items).where(eq(items.id, id)))[0]!.p;
+    expect((await patchItem(aid, id, { ...SAMPLE_MC, stem: "edited" })).status).toBe(200);
+    expect(await read()).toBe(3);
+    expect((await patchItem(aid, id, { ...SAMPLE_MC, points: 4 })).status).toBe(200);
+    expect(await read()).toBe(4);
+    expect((await patchItem(aid, id, { ...SAMPLE_MC, points: null })).status).toBe(200);
+    expect(await read()).toBeNull();
+  });
+
+  test("D7: a points-only PATCH passes the publish lock", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("points published");
+    const created = (await (await createItem(aid, SAMPLE_MC)).json()) as { item: { id: string } };
+    await publishB1(aid);
+    const res = await patchItem(aid, created.item.id, { ...SAMPLE_MC, points: 5 });
+    expect(res.status).toBe(200);
+    // Anything student-facing still 409s.
+    const stem = await patchItem(aid, created.item.id, { ...SAMPLE_MC, points: 5, stem: "new" });
+    expect(stem.status).toBe(409);
+  });
+
+  test("D6: points are refused on a competency assessment (clearing is fine)", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("competency");
+    const created = (await (await createItem(aid, SAMPLE_MC)).json()) as { item: { id: string } };
+    await getDb().execute(
+      sql`update assessments set competency_pass_min_points = 3 where id = ${aid}`,
+    );
+    const post = await createItem(aid, { ...SAMPLE_MC, points: 2 });
+    expect(post.status).toBe(400);
+    expect(((await post.json()) as { error: string }).error).toBe("points_not_allowed_on_competency");
+    const patch = await patchItem(aid, created.item.id, { ...SAMPLE_MC, points: 2 });
+    expect(patch.status).toBe(400);
+    expect((await patchItem(aid, created.item.id, { ...SAMPLE_MC, points: null })).status).toBe(200);
+  });
+
+  test("export carries points only when set; Duplicate keeps them", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("points bundle");
+    await createItem(aid, { ...SAMPLE_MC, points: 2.5 });
+    await createItem(aid, SAMPLE_MC);
+    const bundle = ItemBundleSchema.parse(await (await exportAssessment(aid)).json());
+    expect(bundle.items.map((i) => i.points)).toEqual([2.5, undefined]);
+
+    const { POST } = await import("../app/api/assessments/[id]/duplicate/route");
+    const dup = await POST(new Request(`http://localhost/api/assessments/${aid}/duplicate`, { method: "POST" }), {
+      params: Promise.resolve({ id: aid }),
+    });
+    expect(dup.status).toBe(201);
+    const copyId = ((await dup.json()) as { assessment_id: string }).assessment_id;
+    const rows = await getDb()
+      .select({ p: items.points })
+      .from(items)
+      .where(eq(items.assessment_id, copyId))
+      .orderBy(asc(items.position));
+    expect(rows.map((r) => r.p)).toEqual([2.5, null]);
+  });
+});

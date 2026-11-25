@@ -5,6 +5,7 @@ import {
 } from "@secure-test/schema";
 import { and, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { applyWeight } from "@/lib/scoring/weight";
 import { log, truncate } from "@/lib/log";
 import {
   responses,
@@ -320,8 +321,9 @@ async function scoreClaimed(opts: {
       .values({
         response_id: response.id,
         method: "ai",
-        points: result.points,
-        max_points: result.max_points,
+        // B1 (D1): the rubric total on the item's weight; criterion scores
+        // and the scorer's own bounds check stay in rubric points.
+        ...applyWeight(result.points, result.max_points, opts.item.points),
         rationale: {
           criterion_scores: result.criterion_scores,
           overall_rationale: result.overall_rationale,

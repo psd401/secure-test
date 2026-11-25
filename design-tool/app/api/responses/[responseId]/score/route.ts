@@ -7,6 +7,7 @@ import {
   loadResponseChain,
 } from "@/lib/api/reviewActions";
 import { requireStaff } from "@/lib/api/requireSession";
+import { scaleEntry } from "@/lib/scoring/results";
 import { UUID_RE } from "@/lib/uuid";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
@@ -60,6 +61,9 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json(check.body, { status: check.status });
   }
 
+  // B1 (D1): a rubric total is stored on the item's weight; criterion
+  // scores stay in rubric points.
+  const stored = scaleEntry(chain.item, body.points, body.max_points);
   const db = getDb();
   // Review fix (2026-08-14): onConflictDoNothing closes the race between
   // the hasFinal check above and this insert — a concurrent final would
@@ -69,8 +73,8 @@ export async function POST(req: Request, ctx: RouteContext) {
     .values({
       response_id: chain.response.id,
       method: "human",
-      points: body.points,
-      max_points: body.max_points,
+      points: stored.points,
+      max_points: stored.max_points,
       rationale: {
         ...(body.criterion_scores
           ? { criterion_scores: body.criterion_scores }

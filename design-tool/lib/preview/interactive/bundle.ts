@@ -92,7 +92,9 @@ function definedOnly<T extends Record<string, unknown>>(obj: T): Partial<T> {
  * read — the inverse of `rowToView` (editorModel.ts), with the canvas and
  * blank rules of `itemPatchBody`, so it matches what a save would store.
  */
-export function viewToRow(item: ItemView): DeliverableRow & Pick<ItemRow, "correct_choice_ids" | "correct_answer"> {
+export function viewToRow(
+  item: ItemView,
+): DeliverableRow & Pick<ItemRow, "correct_choice_ids" | "correct_answer" | "points"> {
   const width = item.canvas?.width ?? null;
   const height = item.canvas?.height ?? null;
   const background = item.canvas?.background ?? null;
@@ -135,6 +137,8 @@ export function viewToRow(item: ItemView): DeliverableRow & Pick<ItemRow, "corre
     correct_choice_ids: item.correct_choice_ids,
     correct_answer: item.correct_answer,
     config,
+    // B1: the weight, so the preview's score matches the graded final.
+    points: item.points ?? null,
   };
 }
 

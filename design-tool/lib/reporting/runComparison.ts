@@ -116,13 +116,28 @@ function confidence(rationale: unknown): number | null {
 const mean = (xs: readonly number[]): number | null =>
   xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length;
 
+/**
+ * B1 (docs/point-weighting-design.md): a human final on a weighted rubric
+ * item is stored on the item's weight, while a research row stays in rubric
+ * points. Put the human final back on the research row's scale, so a points
+ * change cannot fake a disagreement. Same scale = unchanged.
+ */
+function inRubricPoints(human: ScorePayload, rubricMax: number): ScorePayload {
+  if (!(human.max_points > 0) || human.max_points === rubricMax) return human;
+  return {
+    ...human,
+    points: (human.points * rubricMax) / human.max_points,
+    max_points: rubricMax,
+  };
+}
+
 /** Points equality with the same float tolerance the rubric bounds check uses. */
 const EPS = 1e-6;
 
 export function compareRun(input: RunComparisonInput): RunComparison {
-  const withFinal = input.pairs.filter(
-    (p): p is ComparisonPair & { human: ScorePayload } => p.human !== null,
-  );
+  const withFinal = input.pairs
+    .filter((p): p is ComparisonPair & { human: ScorePayload } => p.human !== null)
+    .map((p) => ({ ...p, human: inRubricPoints(p.human, p.research.max_points) }));
 
   const diffs = withFinal.map((p) => Math.abs(p.research.points - p.human.points));
   const fractions = withFinal

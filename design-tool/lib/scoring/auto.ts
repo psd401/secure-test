@@ -1,5 +1,6 @@
 import { isKeyedBlank, type ItemResponse } from "@secure-test/schema";
 import type { ItemRow } from "@/db/schema";
+import { applyWeight } from "@/lib/scoring/weight";
 import { graphMaxPoints, graphPoints } from "@secure-test/graphing/server";
 
 // Slice 37: pure auto-scoring for the objectively markable types. Policy
@@ -455,7 +456,22 @@ export function fillBlankTextMatches(
   return keys.some((key) => shortTextMatches(response, key, { exactForm }));
 }
 
+/**
+ * Auto-score one response. B1 (docs/point-weighting-design.md): the natural
+ * score (1 per keyed part, all-or-nothing 1) is put on the item's weight
+ * here, once, so every caller (auto pass, rescore, preview) gets the weighted
+ * number. `points` NULL = the natural score, unchanged.
+ */
 export function scoreResponse(
+  item: ItemRow,
+  response: ItemResponse,
+): AutoScoreResult | null {
+  const natural = naturalScore(item, response);
+  if (!natural) return null;
+  return { ...natural, ...applyWeight(natural.points, natural.max_points, item.points) };
+}
+
+function naturalScore(
   item: ItemRow,
   response: ItemResponse,
 ): AutoScoreResult | null {

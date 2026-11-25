@@ -159,6 +159,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
             exact_form: r.config?.exact_form ?? null,
             scoring_method: r.config?.scoring_method ?? null,
             standards: Array.isArray(r.standards) ? r.standards : [],
+            points: r.points ?? null,
           }))}
         />
       </AssessmentIdProvider>

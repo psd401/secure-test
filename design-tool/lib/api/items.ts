@@ -50,6 +50,17 @@ export const StandardsField = z
       .max(MAX_STANDARDS, `at most ${MAX_STANDARDS} standards per item`),
   );
 
+// B1 D5: more than 0, at most 100, up to 2 decimals (the DB CHECK holds the
+// range; the decimals rule is here). 1e-9 absorbs binary float noise, so
+// 0.29 (stored as 0.28999…) passes and 0.295 does not.
+export const PointsField = z
+  .number()
+  .gt(0, "points must be more than 0")
+  .max(100, "points must be at most 100")
+  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-9, {
+    message: "points may have at most 2 decimals",
+  });
+
 const BaseItemFields = {
   stem: z.string().min(1).max(10000),
   // Slice 36 + review fix (2026-08-14, finding 8): three-state on PATCH —
@@ -59,6 +70,11 @@ const BaseItemFields = {
   // PATCH.) Cross-field rules live in the superRefine on the union below.
   scoring_method: ScoringMethodSchema.nullable().optional(),
   standards: StandardsField.optional(),
+  // B1 (docs/point-weighting-design.md, D5): what the question is worth.
+  // Three-state on PATCH like scoring_method: omitted = keep, null = back to
+  // the natural max, a number = set. Refused on a competency assessment (D6,
+  // the item routes).
+  points: PointsField.nullable().optional(),
   // Graphing calculator (D-7): hide the test's calculator on this question's
   // page. Omitted on PATCH preserves the stored value, like scoring_method.
   no_calculator: z.boolean().optional(),
@@ -918,3 +934,12 @@ export const ReorderBody = z.object({
 export type ReorderBody = z.infer<typeof ReorderBody>;
 
 export const ITEM_TYPE_VALUES = ITEM_TYPES;
+
+/** B1 D6: the refusal for `points` on an item in a competency assessment,
+ * whose pass rule reads rubric criterion points (docs/point-weighting-design.md). */
+export function pointsNotAllowedResponse(): Response {
+  return Response.json(
+    { ok: false, error: "points_not_allowed_on_competency" },
+    { status: 400 },
+  );
+}
