@@ -210,4 +210,13 @@ same-period relaunch; the multi-day share is not measured.
   with no teacher-facing setting, no Monitor used/left and no rejoin approval
   (so a student can quit and rejoin an open sitting with the clock paused).
   Ship it together with slices 2 and 3.
+- 2026-11-26: **slices 1–3 merged and deployed together** (#250 `24b3229c`,
+  #253 `37f7eb28`, #254 `a8f309e1`; deploy of `a8f309e1`, task def rev 141,
+  migrations 76 at boot; ledger PR #258). Open: the production backfill
+  aggregate and a real-session hand-run.
+- 2026-11-26: **slice 4 merged** (#260 `b69c726b`, client only): the attempt
+  screen reads "Your teacher needs to let you back in." and retries the
+  bundle fetch every 10 s for the 10-minute approval window (`RejoinWait`),
+  then gives up with a way back to Your tests (#261). Rides the next client
+  release; hand-run rows in `client/MANUAL-CHECKS.md`.
 
