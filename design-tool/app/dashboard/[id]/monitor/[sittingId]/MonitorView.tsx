@@ -108,6 +108,8 @@ interface Props {
   /** The assessment has no time limit: Adjust time opens on "No time limit"
    * (2026-10-05, `untimedDeadlineWarning`). */
   assessmentUntimed?: boolean;
+  /** Working-time clock (D3): "+N minutes" instead of a new deadline. */
+  workingTime?: boolean;
   /** Row ES: the sitting's scope, copied by "Continue in a new session". */
   sectionPsId?: string | null;
   studentPsIds?: string[] | null;
@@ -163,6 +165,7 @@ export function MonitorView({
   expiresAt,
   kind,
   assessmentUntimed = false,
+  workingTime = false,
   sectionPsId = null,
   studentPsIds = null,
   openCodeOnLoad = false,
@@ -405,6 +408,7 @@ export function MonitorView({
               <PassBackAllControl
                 assessmentId={assessmentId}
                 {...passBackAllTargets(data?.rows ?? [])}
+                workingTime={workingTime}
                 scope="this test session"
                 onPassedBack={() => void load()}
                 size="default"
@@ -419,6 +423,7 @@ export function MonitorView({
             {!isPractice ? (
               <ExtendTimeControl
                 assessmentUntimed={assessmentUntimed}
+                workingTime={workingTime}
                 sittingEnded={!open}
                 target={{ kind: "sitting", sessionId: sittingId }}
                 onExtended={() => void load()}
@@ -569,6 +574,7 @@ export function MonitorView({
             <div className="flex justify-end">
               <ExtendTimeControl
                 assessmentUntimed={assessmentUntimed}
+                workingTime={workingTime}
                 target={{
                   kind: "selected",
                   sessionId: sittingId,
@@ -642,6 +648,7 @@ export function MonitorView({
                     selected={r.attempt_id !== null && selected.has(r.attempt_id)}
                     onToggleSelected={toggleSelected}
                     assessmentUntimed={assessmentUntimed}
+                    workingTime={workingTime}
                     canDelete={canDeleteAttempts}
                     proctor={proctor}
                   />
@@ -711,6 +718,7 @@ function StudentRow({
   sittingEnded,
   onDeleted,
   assessmentUntimed,
+  workingTime,
   selectable,
   selected,
   onToggleSelected,
@@ -726,6 +734,7 @@ function StudentRow({
   sittingEnded: boolean;
   onDeleted: () => void;
   assessmentUntimed: boolean;
+  workingTime: boolean;
   /** Whether the checkbox COLUMN exists (not on a practice sitting). */
   selectable: boolean;
   selected: boolean;
@@ -818,7 +827,7 @@ function StudentRow({
               show — null on every row with no limit and no extension; "No
               time limit" once the teacher removed it (2026-09-24). */}
           {!earlier &&
-          deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed) ? (
+          deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed, r.working_time) ? (
             <span
               className={
                 r.deadline_passed && !r.time_limit_removed
@@ -826,7 +835,7 @@ function StudentRow({
                   : "text-xs text-muted-foreground"
               }
             >
-              {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed)}
+              {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed, r.working_time)}
             </span>
           ) : null}
           {/* Speech-to-text (2026-10-01): the pre-flight on the student's
@@ -867,6 +876,7 @@ function StudentRow({
               <PassBackControl
                 attemptId={r.attempt_id}
                 studentName={r.name}
+                workingTime={workingTime}
                 // The Monitor has no per-response score list in hand; the
                 // simpler "scored on the next hand-in" line covers it either
                 // way (docs/pass-back-design.md, slice 2 note).
@@ -909,6 +919,7 @@ function StudentRow({
                 {canExtend(r.status) ? (
                   <ExtendTimeControl
                     assessmentUntimed={assessmentUntimed}
+                    workingTime={workingTime}
                     target={{ kind: "attempt", attemptId: r.attempt_id }}
                     sittingEnded={sittingEnded}
                     onExtended={onDeleted}

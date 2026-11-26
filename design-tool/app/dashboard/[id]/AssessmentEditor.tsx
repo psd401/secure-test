@@ -43,7 +43,7 @@ import { RichTextField } from "./RichTextField";
 import type { SourceSummary } from "./SourcePicker";
 import { OverridesPanel } from "./OverridesPanel";
 import { SittingsPanel } from "./SittingsPanel";
-import type { ItemType } from "@/db/schema";
+import type { ItemType, TimeLimitMode } from "@/db/schema";
 import { usesRichTextField } from "@/lib/authoring/richTextTypes";
 import { isPageGroup } from "@/lib/authoring/pageGroup";
 import { editorStartAction } from "@/lib/authoring/startScreen";
@@ -164,6 +164,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       ? String(Math.round(assessment.time_limit_seconds / 60))
       : "",
   );
+  // Working-time clock (D1): what the limit counts; saved with it.
+  const [timeLimitMode, setTimeLimitMode] = useState<TimeLimitMode>(assessment.time_limit_mode);
   // U-18: the class period the Allowed tab is showing (null = all periods).
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
   const [allowedAccommodations, setAllowedAccommodations] = useState<
@@ -468,6 +470,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           name,
           description,
           time_limit_seconds,
+          time_limit_mode: timeLimitMode,
           allow_llm_authoring: allowLlm,
           student_layout: studentLayout,
           calculator_mode: calculatorMode,
@@ -1482,6 +1485,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
         setDescription={setDescription}
         timeLimitMinutes={timeLimitMinutes}
         setTimeLimitMinutes={setTimeLimitMinutes}
+        timeLimitMode={timeLimitMode}
+        setTimeLimitMode={setTimeLimitMode}
         allowLlm={allowLlm}
         setAllowLlm={setAllowLlm}
         studentLayout={studentLayout}
@@ -2243,6 +2248,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           archived={archivedAt !== null}
           onPublish={() => setPublishOpen("publish")}
           assessmentUntimed={(assessment.time_limit_seconds ?? 0) <= 0}
+          workingTime={(assessment.time_limit_seconds ?? 0) > 0 && assessment.time_limit_mode === "working"}
         />
       </TabsContent>
       </Tabs>

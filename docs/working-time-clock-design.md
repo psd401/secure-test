@@ -1,7 +1,7 @@
 # Working-time clock — design note (2026-11-25)
 
-Status: decisions D1–D6 and Q1–Q4 made (James, 2026-11-25). Slice 1 in
-progress.
+Status: decisions D1–D6 and Q1–Q4 made (James, 2026-11-25). Slices 1–2
+built; slice 3 next.
 
 Roadmap: row U-8 (a) in `docs/roadmap-2026-09.md`; first on the public
 roadmap's Ahead list since PR #248. Builds on
@@ -48,7 +48,9 @@ same-period relaunch; the multi-day share is not measured.
 - **D5 The Monitor shows minutes used and minutes left** per student.
 - **D6 Attempts in progress at deploy** get credit for time already spent,
   estimated from their existing `lockdown_begin` / `lockdown_end` /
-  `time_expired` / `sitting_closed` events.
+  `time_expired` / `sitting_closed` events. Handed-in attempts get the same
+  credit (PR #250 review), so a later pass back resumes the clock rather than
+  starting a fresh limit.
 
 ## Model
 
@@ -62,9 +64,11 @@ same-period relaunch; the multi-day share is not measured.
   poll already carries the deadline (EX-1). On each poll of an in-progress
   working-time attempt: `gap = now − last_tick_at`; if `gap ≤ 2 min` (Q4), add
   it to `working_seconds`, else record a `clock_gap` event; set
-  `last_tick_at = now`. A crash or quit loses at most one gap. Joining (the delivery route) sets `last_tick_at = now` without
-  adding time. Untimed and wall-clock attempts never write, so the poll
-  stays read-only for them. **No client change.**
+  `last_tick_at = now`. A crash or quit loses at most one gap. Joining (the
+  delivery route) sets `last_tick_at = now` without adding time, however short
+  the gap (a quit and relaunch is not test time). Untimed and wall-clock
+  attempts never write, so the poll stays read-only for them. **No client
+  change.**
 - **The deadline** (working time) =
   `now + max(0, limit + extension_seconds − working_seconds)`, recomputed on
   each request. During a session it stays steady; between sessions it moves
@@ -152,6 +156,29 @@ same-period relaunch; the multi-day share is not measured.
   rule, the tick incl. a stale caller copy, extend, the backfill on fixture
   rows); wall-clock tests pinned to `time_limit_mode: "wall"`. Full suite
   4552 pass on a branch test database (`secure_test_design_tool_test_wtc`).
+- 2026-11-25: **slice 2 BUILT** (not merged or deployed). Settings "Clock"
+  choice under the time limit ("Time spent in the test" / "Clock time from
+  the start"; `UpdateAssessmentBody.time_limit_mode`, locked once Published
+  like the limit; Duplicate copies it). Extend time: `add_minutes` (1–600) on
+  both extend routes adds to `extension_seconds` atomically, puts a removed
+  limit back, event `deadline_extended {add_seconds}`; refused on a wall-clock
+  or untimed test (400 `add_minutes_needs_working_time`). The dialog shows
+  "Add minutes" instead of "New deadline" on a working-time test. Pass back:
+  `attemptIsTimed` renamed `reopenNeedsEndTime` and false on a working-time
+  limit, so no end time is asked for and the clock resumes; optional
+  `add_minutes` on the per-attempt and bulk routes (event `passed_back
+  {add_seconds}`), a shared "Add minutes (optional)" field in the three
+  dialogs. Monitor, Test sessions list and per-student page: "12 of 60 min
+  used · 48 left" (`working_time` on attendance and results rows,
+  `workingTimeNote`). Help topic 7 "Three clocks" and the Adjust time / pass
+  back / troubleshooting lines. Tests:
+  `test/working-time-clock-teacher.test.ts` (20). Full suite 4570 pass;
+  checked in a dev server (Settings save, Monitor used/left, +15 min, pass
+  back +10 min).
+- 2026-11-25: **#250 review fixes** (4b07a9c6): a join never counts the gap
+  (option `join`, was `logGap`); the Q1 override conversion and the D6 credit
+  cover handed-in attempts too. Load: one small row update per student on a
+  timed test every 5 s — about 20 writes/s at 100 concurrent students.
 - **Deploy note:** slice 1 alone changes every timed test to working time
   with no teacher-facing setting, no Monitor used/left and no rejoin approval
   (so a student can quit and rejoin an open sitting with the clock paused).

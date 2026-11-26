@@ -19,9 +19,13 @@
  * safely idempotent — a teacher pressing "extend to 10:45" twice gets 10:45.
  * The same holds for "No time limit" (2026-09-24): pressing it twice leaves
  * the attempt removed.
+ *
+ * "+N minutes" (working-time clock, D3) is the exception: it ADDS to
+ * `extension_seconds`, so pressing it twice adds twice — what the teacher's
+ * words say. The dialog disables its button while the request is in flight.
  */
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   attempt_events,
@@ -45,7 +49,16 @@ export interface ExtendResult {
  * carries two answers and `deadlineFor` never has to rank them in practice
  * (it does anyway: the removal wins).
  */
-export type ExtendTarget = { endsAt: Date } | { noLimit: true };
+export type ExtendTarget = { endsAt: Date } | { noLimit: true } | { addSeconds: number };
+
+/**
+ * Working-time clock (docs/working-time-clock-design.md, D3): the most a
+ * teacher can add in one press — a school day. A bigger number is a typo.
+ */
+export const MAX_ADD_MINUTES = 600;
+
+/** "+N minutes": a whole number of minutes, 1…MAX_ADD_MINUTES. */
+export const AddMinutes = z.number().int().min(1).max(MAX_ADD_MINUTES);
 
 /**
  * The two routes' shared body fields: `ends_at` XOR `no_limit: true`. The
@@ -62,21 +75,42 @@ export const extendBodyFields = {
     })
     .optional(),
   no_limit: z.literal(true).optional(),
+  /** Working-time clock (D3): minutes added to this student's limit. */
+  add_minutes: AddMinutes.optional(),
 };
 
-/** Both present or neither present is `invalid_body`, not a guess. */
-export function hasExactlyOneTarget(body: {
+interface ExtendBody {
   ends_at?: string;
   no_limit?: true;
-}): boolean {
-  return (body.ends_at !== undefined) !== (body.no_limit !== undefined);
+  add_minutes?: number;
+}
+
+/** Exactly one of `ends_at`, `no_limit`, `add_minutes`; anything else is
+ * `invalid_body`, not a guess. */
+export function hasExactlyOneTarget(body: ExtendBody): boolean {
+  const present = [body.ends_at, body.no_limit, body.add_minutes].filter((v) => v !== undefined);
+  return present.length === 1;
 }
 
 /** The parsed body as an `ExtendTarget`; call after `hasExactlyOneTarget`. */
-export function toExtendTarget(body: { ends_at?: string; no_limit?: true }): ExtendTarget {
-  return body.no_limit
-    ? { noLimit: true }
-    : { endsAt: new Date(Date.parse(body.ends_at!)) };
+export function toExtendTarget(body: ExtendBody): ExtendTarget {
+  if (body.no_limit) return { noLimit: true };
+  if (body.add_minutes !== undefined) return { addSeconds: body.add_minutes * 60 };
+  return { endsAt: new Date(Date.parse(body.ends_at!)) };
+}
+
+/**
+ * Working-time clock (D3): "+N minutes" only means something on a
+ * working-time limit — a wall-clock test or an untimed one has no clock to add
+ * to, and keeps "until 10:45". The routes refuse the mismatch with
+ * `add_minutes_needs_working_time` rather than guessing an end time.
+ */
+export function targetFitsClock(
+  target: ExtendTarget,
+  timeLimit: Parameters<typeof isWorkingTimeLimit>[0] | null,
+): boolean {
+  if (!("addSeconds" in target)) return true;
+  return timeLimit !== null && isWorkingTimeLimit(timeLimit);
 }
 
 export async function extendAttempt(
@@ -86,6 +120,31 @@ export async function extendAttempt(
   target: ExtendTarget,
   now: Date = new Date(),
 ): Promise<ExtendResult> {
+  if ("addSeconds" in target) {
+    // Working-time clock (D3): added to what the student already has, in the
+    // UPDATE itself so two presses add twice rather than racing. Adding time
+    // also puts a removed limit back, as an end time does.
+    // One transaction: added time with no audit row is the one outcome the
+    // event exists to prevent (#253 review).
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(attempts)
+        .set({
+          extension_seconds: sql`${attempts.extension_seconds} + ${target.addSeconds}`,
+          time_limit_removed: false,
+          updated_at: now,
+        })
+        .where(eq(attempts.id, attempt.id))
+        .returning();
+      await tx.insert(attempt_events).values({
+        attempt_id: attempt.id,
+        kind: "deadline_extended",
+        at: now,
+        detail: { add_seconds: target.addSeconds, by: staffSub },
+      });
+      return { attempt: row! };
+    });
+  }
   const noLimit = "noLimit" in target;
   // Working-time clock (docs/working-time-clock-design.md, D3; slice 1
   // compatibility): on a working-time test the end time becomes extra

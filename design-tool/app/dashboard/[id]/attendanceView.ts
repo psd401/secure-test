@@ -53,6 +53,8 @@ export interface AttendanceRow {
   /** Remove time limit (2026-09-24): this row's in-progress attempt has "No
    * time limit". False on every other row, submitted ones included. */
   time_limit_removed: boolean;
+  /** Working-time clock (D5): see lib/api/sittingAttendance.ts. */
+  working_time: { used_seconds: number; left_seconds: number } | null;
   /** Safeguarding alerts slice 2: open alerts on this row's attempt. Only the
    * Monitor's attendance route sends it; absent = 0. */
   safeguarding_open?: number;
@@ -372,14 +374,28 @@ export function selectAllState(
  */
 export const TIME_RAN_OUT_NOTE = "Time ran out — use Adjust time to let them continue";
 
+/**
+ * Working-time clock (D5): "12 of 60 min used · 48 left". Used rounds down and
+ * left rounds up, so a student with 30 s left still reads "1 left", not 0.
+ */
+export function workingTimeNote(w: { used_seconds: number; left_seconds: number }): string {
+  const used = Math.floor(w.used_seconds / 60);
+  const left = Math.ceil(w.left_seconds / 60);
+  return `${used} of ${used + left} min used · ${left} left`;
+}
+
 export function deadlineNote(
   deadline_at: string | null,
   deadline_passed: boolean,
   now: Date = new Date(),
   time_limit_removed = false,
+  working_time: { used_seconds: number; left_seconds: number } | null = null,
 ): string | null {
   if (time_limit_removed) return "No time limit";
   if (deadline_passed) return TIME_RAN_OUT_NOTE;
+  // Working-time clock (D5): the deadline moves between sessions, so the
+  // clock's own numbers say more than an instant would.
+  if (working_time) return workingTimeNote(working_time);
   if (!deadline_at) return null;
   return `Until ${formatWhen(deadline_at, now)}`;
 }

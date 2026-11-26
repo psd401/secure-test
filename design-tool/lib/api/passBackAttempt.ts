@@ -34,7 +34,6 @@ import {
   type AttemptRow,
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
-import { extensionForEndTime, isWorkingTimeLimit, loadTimeLimit } from "@/lib/api/attemptDeadline";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -50,6 +49,12 @@ export interface PassBackOptions {
    * the assessment is timed.
    */
   endsAt?: Date | null;
+  /**
+   * Working-time clock (D4): seconds added to the student's limit with this
+   * pass back — the dialog's optional "+N minutes". The caller checks the
+   * test is on working time (`isWorkingTimeLimit`).
+   */
+  addSeconds?: number;
   now?: Date;
   /**
    * U-25 slice 3 (D-8, D-21…D-27): corrections mode for THIS pass back. Both
@@ -91,14 +96,9 @@ export async function passBackAttempt(
   const corrections = correctionsFor(options.corrections, now);
   const previouslySubmittedAt = attempt.submitted_at;
 
-  // Working-time clock (D4; slice 1 compatibility): the clock resumes where
-  // it stopped (`working_seconds` is kept); an end time from the dialog
-  // becomes extra seconds, as Extend time does.
-  const timeLimit = endsAt ? await loadTimeLimit(db, attempt) : null;
-  const extension =
-    endsAt && timeLimit && isWorkingTimeLimit(timeLimit)
-      ? extensionForEndTime(attempt, timeLimit, endsAt, now)
-      : null;
+  // Working-time clock (D4): the clock resumes where it stopped —
+  // `working_seconds` is kept, and the routes send no end time on a
+  // working-time test (`reopenNeedsEndTime`), only the optional minutes.
 
   return db.transaction(async (tx) => {
     const responseRows = await tx
@@ -142,7 +142,9 @@ export async function passBackAttempt(
         // deadline it never had, and a `null` here would ERASE an extension on
         // a timed one.
         ...(endsAt ? { deadline_override_at: endsAt } : {}),
-        ...(extension !== null ? { extension_seconds: extension } : {}),
+        ...(options.addSeconds
+          ? { extension_seconds: sql`${attempts.extension_seconds} + ${options.addSeconds}` }
+          : {}),
         updated_at: now,
       })
       .where(eq(attempts.id, attempt.id))
@@ -160,7 +162,7 @@ export async function passBackAttempt(
         previously_submitted_at: previouslySubmittedAt?.toISOString() ?? null,
         superseded_scores: supersededScores,
         ends_at: endsAt?.toISOString() ?? null,
-        ...(extension !== null ? { extension_seconds: extension } : {}),
+        ...(options.addSeconds ? { add_seconds: options.addSeconds } : {}),
         // Slice 3: what the student was told to work on, for the audit trail
         // — only when asked, so a plain pass back's event is unchanged.
         ...(corrections

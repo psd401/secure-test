@@ -19,6 +19,11 @@ import {
 } from "@/components/app/CorrectionsOptions";
 import { ApiError, passBackErrorCopy } from "@/lib/ui/errorCopy";
 import {
+  PASS_BACK_ADD_MINUTES_ERROR,
+  PassBackAddMinutes,
+  passBackAddMinutesBody,
+} from "@/components/app/PassBackAddMinutes";
+import {
   defaultExtendValue,
   toIsoInstant,
 } from "@/components/app/ExtendTimeControl";
@@ -72,6 +77,7 @@ export function PassBackAllControl({
   assessmentId,
   attemptIds,
   timed,
+  workingTime = false,
   scope,
   onPassedBack,
   label = "Pass back everyone",
@@ -82,8 +88,10 @@ export function PassBackAllControl({
   assessmentId: string;
   /** The handed-in attempts to pass back, as the caller's rows say. */
   attemptIds: string[];
-  /** True when any of them has a deadline (`attemptIsTimed`). */
+  /** True when any of them has a deadline (`reopenNeedsEndTime`). */
   timed: boolean;
+  /** Working-time clock (D4): offer the optional "+N minutes". */
+  workingTime?: boolean;
   scope: string | null;
   onPassedBack: () => void;
   label?: string;
@@ -93,6 +101,7 @@ export function PassBackAllControl({
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
+  const [addMinutes, setAddMinutes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -110,6 +119,11 @@ export function PassBackAllControl({
         return;
       }
     }
+    const added = workingTime ? passBackAddMinutesBody(addMinutes) : {};
+    if (added === null) {
+      setError(PASS_BACK_ADD_MINUTES_ERROR);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -119,6 +133,7 @@ export function PassBackAllControl({
         body: JSON.stringify({
           attempt_ids: attemptIds,
           ...(endsAt ? { ends_at: endsAt } : {}),
+          ...added,
           ...correctionsBody(corrections),
         }),
       });
@@ -142,6 +157,7 @@ export function PassBackAllControl({
           setError(null);
           setStatus(null);
           setValue(defaultExtendValue());
+          setAddMinutes("");
           setCorrections(NO_CORRECTIONS);
           setOpen(true);
         } else if (!busy) setOpen(false);
@@ -185,6 +201,9 @@ export function PassBackAllControl({
               This test has a time limit — pick when it ends now, for everyone.
             </span>
           </label>
+        ) : null}
+        {workingTime ? (
+          <PassBackAddMinutes value={addMinutes} onChange={setAddMinutes} disabled={busy} />
         ) : null}
         <CorrectionsOptions value={corrections} onChange={setCorrections} disabled={busy} />
         {error ? (

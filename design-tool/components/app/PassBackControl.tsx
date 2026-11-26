@@ -19,6 +19,11 @@ import {
 } from "@/components/app/CorrectionsOptions";
 import { ApiError, passBackErrorCopy } from "@/lib/ui/errorCopy";
 import {
+  PASS_BACK_ADD_MINUTES_ERROR,
+  PassBackAddMinutes,
+  passBackAddMinutesBody,
+} from "@/components/app/PassBackAddMinutes";
+import {
   defaultExtendValue,
   toIsoInstant,
 } from "@/components/app/ExtendTimeControl";
@@ -80,6 +85,7 @@ export function PassBackControl({
   studentName,
   scoreCount,
   timed,
+  workingTime = false,
   onPassedBack,
   disabledReason,
   size = "sm",
@@ -89,12 +95,15 @@ export function PassBackControl({
   /** k in "Their k scores are kept as a record…". */
   scoreCount: number;
   timed: boolean;
+  /** Working-time clock (D4): offer the optional "+N minutes". */
+  workingTime?: boolean;
   onPassedBack: () => void;
   disabledReason?: string;
   size?: "xs" | "sm" | "default";
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
+  const [addMinutes, setAddMinutes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [corrections, setCorrections] = useState<CorrectionsChoice>(NO_CORRECTIONS);
@@ -104,6 +113,7 @@ export function PassBackControl({
   function openDialog() {
     setError(null);
     setValue(defaultExtendValue());
+    setAddMinutes("");
     setCorrections(NO_CORRECTIONS);
     setOpen(true);
   }
@@ -117,6 +127,11 @@ export function PassBackControl({
         return;
       }
     }
+    const added = workingTime ? passBackAddMinutesBody(addMinutes) : {};
+    if (added === null) {
+      setError(PASS_BACK_ADD_MINUTES_ERROR);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -125,6 +140,7 @@ export function PassBackControl({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...(endsAt ? { ends_at: endsAt } : {}),
+          ...added,
           ...correctionsBody(corrections),
         }),
       });
@@ -182,6 +198,9 @@ export function PassBackControl({
                 This attempt has a deadline — pick when it ends now.
               </span>
             </label>
+          ) : null}
+          {workingTime ? (
+            <PassBackAddMinutes value={addMinutes} onChange={setAddMinutes} disabled={busy} />
           ) : null}
           <CorrectionsOptions value={corrections} onChange={setCorrections} disabled={busy} />
           {error ? (

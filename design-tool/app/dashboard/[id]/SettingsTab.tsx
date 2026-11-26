@@ -9,6 +9,7 @@ import { StatusLine, type SaveState } from "@/components/app/StatusLine";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { DuplicateAssessmentButton } from "../DuplicateAssessmentButton";
 import type { ItemView, AssessmentView } from "./editorModel";
+import type { TimeLimitMode } from "@/db/schema";
 
 /** Phase 4 slice D: the Settings tab's panel, moved unchanged out of
  * AssessmentEditor.tsx. Every value and handler is the editor's own. */
@@ -21,6 +22,8 @@ export interface SettingsTabProps {
   setDescription: Dispatch<SetStateAction<string>>;
   timeLimitMinutes: string;
   setTimeLimitMinutes: Dispatch<SetStateAction<string>>;
+  timeLimitMode: TimeLimitMode;
+  setTimeLimitMode: Dispatch<SetStateAction<TimeLimitMode>>;
   allowLlm: boolean;
   setAllowLlm: Dispatch<SetStateAction<boolean>>;
   studentLayout: "scroll" | "paged";
@@ -56,6 +59,8 @@ export function SettingsTab(props: SettingsTabProps) {
     setDescription,
     timeLimitMinutes,
     setTimeLimitMinutes,
+    timeLimitMode,
+    setTimeLimitMode,
     allowLlm,
     setAllowLlm,
     studentLayout,
@@ -117,6 +122,46 @@ export function SettingsTab(props: SettingsTabProps) {
           Leave blank for untimed
         </span>
       </label>
+      {/* Working-time clock (docs/working-time-clock-design.md, D1): what the
+          limit counts. Shown only with a limit; saved with it. */}
+      {timeLimitMinutes.trim() !== "" ? (
+        <fieldset className="space-y-1" disabled={isLocked}>
+          <legend className="block text-sm font-medium">Clock</legend>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="time-limit-mode"
+              value="working"
+              checked={timeLimitMode === "working"}
+              onChange={() => setTimeLimitMode("working")}
+              className="mt-1"
+            />
+            <span>
+              Time spent in the test
+              <span className="block text-xs text-muted-foreground">
+                Pauses between sessions, so a test can take more than one class. Letting a
+                student back in after they leave is up to you.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="time-limit-mode"
+              value="wall"
+              checked={timeLimitMode === "wall"}
+              onChange={() => setTimeLimitMode("wall")}
+              className="mt-1"
+            />
+            <span>
+              Clock time from the start
+              <span className="block text-xs text-muted-foreground">
+                Runs from when the student opens the test, whether or not they are in it.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+      ) : null}
       <label className="block">
         <span className="block text-sm font-medium">How students move through the test</span>
         <NativeSelect

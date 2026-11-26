@@ -10,7 +10,7 @@ import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 import { authorizeCompetency, canTransition, isOptionOf } from "@/lib/competency/assignments";
 import { attemptForStudent, loadCaseStates } from "@/lib/competency/caseState";
 import { passBackAttempt } from "@/lib/api/passBackAttempt";
-import { attemptIsTimed } from "@/lib/api/attemptDeadline";
+import { reopenNeedsEndTime } from "@/lib/api/attemptDeadline";
 import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import { normalizeEmail } from "@/lib/roster/queries";
 import { roleForEmail } from "@/lib/auth/roles";
@@ -120,7 +120,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     const attempt = await attemptForStudent(db, access.assessment, current.student_ps_id);
     const reopen = attempt?.status === "submitted";
     let endsAt: Date | null = null;
-    if (attempt && reopen && attemptIsTimed(attempt, access.assessment)) {
+    if (attempt && reopen && reopenNeedsEndTime(attempt, access.assessment)) {
       if (!body.ends_at) {
         return NextResponse.json({ ok: false, error: "ends_at_required" }, { status: 400 });
       }

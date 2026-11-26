@@ -11,6 +11,7 @@ export function PassBackAllAndReload(props: {
   assessmentId: string;
   attemptIds: string[];
   timed: boolean;
+  workingTime: boolean;
   sectionLabel: string | null;
 }) {
   return (
@@ -18,6 +19,7 @@ export function PassBackAllAndReload(props: {
       assessmentId={props.assessmentId}
       attemptIds={props.attemptIds}
       timed={props.timed}
+      workingTime={props.workingTime}
       scope={props.sectionLabel}
       label="Pass back all handed in"
       onPassedBack={() => {

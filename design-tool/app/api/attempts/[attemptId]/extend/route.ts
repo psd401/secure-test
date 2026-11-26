@@ -7,9 +7,11 @@ import {
   extendAttempt,
   extendBodyFields,
   hasExactlyOneTarget,
+  targetFitsClock,
   toExtendTarget,
   type ExtendTarget,
 } from "@/lib/api/extendAttempt";
+import { loadTimeLimit } from "@/lib/api/attemptDeadline";
 import { UUID_RE } from "@/lib/uuid";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
@@ -17,8 +19,8 @@ interface RouteContext {
   params: Promise<{ attemptId: string }>;
 }
 
-/** `ends_at` (an absolute instant) XOR `no_limit: true` — see
- * `extendBodyFields`. */
+/** One of `ends_at` (an absolute instant), `no_limit: true` or
+ * `add_minutes` — see `extendBodyFields`. */
 const Body = z.object(extendBodyFields);
 
 /**
@@ -57,6 +59,10 @@ const Body = z.object(extendBodyFields);
  * Remove time limit (2026-09-24): `{ no_limit: true }` instead of `ends_at`
  * takes this student's limit away altogether (`attempts.time_limit_removed`);
  * a later `ends_at` puts a deadline back. Both or neither is `invalid_body`.
+ *
+ * Working-time clock (docs/working-time-clock-design.md, D3): `add_minutes`
+ * adds to this student's limit on a working-time test; on any other test it
+ * is 400 `add_minutes_needs_working_time`. Exactly one of the three fields.
  */
 export async function POST(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
@@ -77,7 +83,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!bodyRead.ok) return bodyRead.response;
   try {
     const body = Body.parse(bodyRead.parse());
-    if (!hasExactlyOneTarget(body)) throw new Error("ends_at xor no_limit");
+    if (!hasExactlyOneTarget(body)) throw new Error("one of ends_at, no_limit, add_minutes");
     target = toExtendTarget(body);
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
@@ -90,6 +96,13 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   if (attempt.status !== "in_progress") {
     return NextResponse.json({ ok: false, error: "not_in_progress" }, { status: 409 });
+  }
+
+  if (!targetFitsClock(target, await loadTimeLimit(db, attempt))) {
+    return NextResponse.json(
+      { ok: false, error: "add_minutes_needs_working_time" },
+      { status: 400 },
+    );
   }
 
   const { attempt: row } = await extendAttempt(db, attempt, auth.session.sub, target, now);

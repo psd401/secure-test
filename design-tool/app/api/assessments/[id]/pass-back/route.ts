@@ -5,7 +5,8 @@ import { getDb } from "@/db/client";
 import { attempts } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { authorizeAssessment } from "@/lib/api/access";
-import { attemptIsTimed } from "@/lib/api/attemptDeadline";
+import { isWorkingTimeLimit, reopenNeedsEndTime } from "@/lib/api/attemptDeadline";
+import { AddMinutes } from "@/lib/api/extendAttempt";
 import { passBackAttempt } from "@/lib/api/passBackAttempt";
 import { UUID_RE } from "@/lib/uuid";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
@@ -29,6 +30,9 @@ const BodySchema = z.object({
       message: "ends_at must be a parseable date",
     })
     .optional(),
+  /** Working-time clock (D4): optional minutes added for everyone this press
+   * passes back on a working-time test. */
+  add_minutes: AddMinutes.optional(),
   /** U-25 slice 3 (D-8, D-25): corrections mode, for everyone this press
    * passes back. */
   show_marks: z.boolean().optional(),
@@ -117,7 +121,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   const skipped = ids.length - toPassBack.length;
 
   const endsAt = parsed.data.ends_at ? new Date(Date.parse(parsed.data.ends_at)) : null;
-  const anyTimed = toPassBack.some((a) => attemptIsTimed(a, assessment));
+  const anyTimed = toPassBack.some((a) => reopenNeedsEndTime(a, assessment));
   if (anyTimed) {
     if (!endsAt) {
       return NextResponse.json({ ok: false, error: "ends_at_required" }, { status: 400 });
@@ -127,11 +131,21 @@ export async function POST(req: Request, ctx: RouteContext) {
     }
   }
 
+  const addMinutes = parsed.data.add_minutes;
+  if (addMinutes !== undefined && !isWorkingTimeLimit(assessment)) {
+    return NextResponse.json(
+      { ok: false, error: "add_minutes_needs_working_time" },
+      { status: 400 },
+    );
+  }
+
   const passed: { attempt_id: string; status: string }[] = [];
   let supersededScores = 0;
   for (const attempt of toPassBack) {
     const result = await passBackAttempt(db, attempt, auth.session.sub, {
-      endsAt: attemptIsTimed(attempt, assessment) ? endsAt : null,
+      endsAt: reopenNeedsEndTime(attempt, assessment) ? endsAt : null,
+      // A removed limit stays removed: the minutes go to the clocked ones.
+      addSeconds: addMinutes && !attempt.time_limit_removed ? addMinutes * 60 : undefined,
       corrections: {
         show_marks: parsed.data.show_marks ?? false,
         lock_correct: parsed.data.lock_correct ?? false,

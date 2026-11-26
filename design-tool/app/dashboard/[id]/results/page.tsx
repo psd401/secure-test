@@ -26,7 +26,7 @@ import { resolveAssessmentAssets } from "@/lib/assets/assessmentAssets";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
 import { HandInInProgressAndReload } from "./HandInInProgressAndReload";
 import { PassBackAllAndReload } from "./PassBackAllAndReload";
-import { attemptIsTimed } from "@/lib/api/attemptDeadline";
+import { reopenNeedsEndTime } from "@/lib/api/attemptDeadline";
 import { ScoreEssaysWithAiAndReload } from "./ScoreEssaysWithAiAndReload";
 import { aiBatchCounts } from "@/lib/scoring/aiBatch";
 import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
@@ -217,7 +217,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
               ),
             ),
           )
-      ).some((a) => attemptIsTimed(a, assessment))
+      ).some((a) => reopenNeedsEndTime(a, assessment))
     : false;
   const aiBatch = levelSatisfies(access.level, "score") && submittedShown.length > 0
     ? await aiBatchCounts(
@@ -389,6 +389,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
             assessmentId={assessment.id}
             attemptIds={submittedShown.map((r) => r.attempt_id)}
             timed={passBackTimed}
+            workingTime={(assessment.time_limit_seconds ?? 0) > 0 && assessment.time_limit_mode === "working"}
             sectionLabel={sectionLabel}
           />
           <span className="text-xs text-muted-foreground">

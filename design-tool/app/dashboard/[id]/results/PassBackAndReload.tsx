@@ -13,6 +13,7 @@ export function PassBackAndReload({
   studentName,
   scoreCount,
   timed,
+  workingTime = false,
   disabledReason,
   size,
 }: {
@@ -20,6 +21,8 @@ export function PassBackAndReload({
   studentName: string;
   scoreCount: number;
   timed: boolean;
+  /** Working-time clock (D4). */
+  workingTime?: boolean;
   disabledReason?: string;
   size?: "xs" | "sm" | "default";
 }) {
@@ -29,6 +32,7 @@ export function PassBackAndReload({
       studentName={studentName}
       scoreCount={scoreCount}
       timed={timed}
+      workingTime={workingTime}
       disabledReason={disabledReason}
       size={size}
       onPassedBack={() => {

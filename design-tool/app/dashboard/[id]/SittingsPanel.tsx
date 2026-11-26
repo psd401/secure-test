@@ -138,6 +138,8 @@ interface Props {
   /** The SAVED assessment has no time limit: Adjust time opens on "No time
    * limit" (2026-10-05, `untimedDeadlineWarning`). */
   assessmentUntimed?: boolean;
+  /** Working-time clock (D3): "+N minutes" instead of a new deadline. */
+  workingTime?: boolean;
 }
 
 function sectionLabel(s: Section): string {
@@ -194,6 +196,7 @@ export function SittingsPanel({
   archived = false,
   onPublish,
   assessmentUntimed = false,
+  workingTime = false,
 }: Props) {
   const [sections, setSections] = useState<Section[]>([]);
   const [roster, setRoster] = useState<RosterStudent[] | null>(null);
@@ -769,6 +772,7 @@ export function SittingsPanel({
                 every session its students sat in. */}
             <PassBackSectionControl
               assessmentId={assessmentId}
+              workingTime={workingTime}
               onPassedBack={() => {
                 setNow(Date.now());
                 for (const id of Object.keys(attendance)) void loadAttendance(id);
@@ -964,6 +968,7 @@ export function SittingsPanel({
                             <PassBackAllControl
                               assessmentId={assessmentId}
                               {...passBackAllTargets(att?.rows ?? [])}
+                              workingTime={workingTime}
                               scope="this test session"
                               onPassedBack={() => {
                                 setNow(Date.now());
@@ -985,6 +990,7 @@ export function SittingsPanel({
                             <ExtendTimeControl
                               target={{ kind: "sitting", sessionId: s.id }}
                               assessmentUntimed={assessmentUntimed}
+                              workingTime={workingTime}
                               sittingEnded={!open}
                               onExtended={() => {
                                 setNow(Date.now());
@@ -1118,7 +1124,7 @@ export function SittingsPanel({
                                                   shows, so a run-out deadline is visible
                                                   here too (in-progress rows only). */}
                                               {r.status === "in_progress" &&
-                                              deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed) ? (
+                                              deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed, r.working_time) ? (
                                                 <span
                                                   className={
                                                     r.deadline_passed && !r.time_limit_removed
@@ -1126,7 +1132,7 @@ export function SittingsPanel({
                                                       : "text-xs text-muted-foreground"
                                                   }
                                                 >
-                                                  {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed)}
+                                                  {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed, r.working_time)}
                                                 </span>
                                               ) : null}
                                             </span>

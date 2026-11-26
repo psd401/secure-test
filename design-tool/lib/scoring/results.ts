@@ -15,7 +15,7 @@ import {
   type ItemRow,
   type RosterSectionRow,
 } from "@/db/schema";
-import { deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
+import { deadlineFor, isPastDeadline, workingTimeLeft } from "@/lib/api/attemptDeadline";
 import {
   normalizeEmail,
   sectionsCurrentlyTaughtBy,
@@ -109,6 +109,9 @@ export interface ResultsRow {
   // Null when there is no limit and no extension (the overwhelming majority)
   // and on every submitted row, where the deadline no longer governs anything.
   deadline_at: string | null;
+  // Working-time clock (D5): seconds used and left on an in-progress
+  // working-time attempt, null otherwise — the per-student page's line.
+  working_time: { used_seconds: number; left_seconds: number } | null;
   cells: ResultsCell[]; // aligned with items order
   // Null on an in-progress row: nothing has been scored, and printing a 0
   // where a total belongs reads as a mark of zero.
@@ -620,6 +623,7 @@ export async function buildResults(
     // can stop refusing what the route accepts.
     const deadline = inProgress ? deadlineFor(attempt, timeLimit) : null;
     const deadlinePassed = inProgress && isPastDeadline(now, deadline);
+    const working = inProgress ? workingTimeLeft(attempt, timeLimit, now) : null;
     const percent =
       !inProgress && unscored === 0 && rowMaxPoints > 0
         ? Math.round((100 * total) / rowMaxPoints)
@@ -648,6 +652,9 @@ export async function buildResults(
       sitting_open: sittingOpen,
       deadline_passed: deadlinePassed,
       deadline_at: deadline?.toISOString() ?? null,
+      working_time: working
+        ? { used_seconds: Math.floor(working.used), left_seconds: Math.ceil(working.left) }
+        : null,
       cells,
       total_points: inProgress ? null : total,
       scored_max_points: inProgress ? null : scoredMax,

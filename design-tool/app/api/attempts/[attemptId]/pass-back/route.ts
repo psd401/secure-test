@@ -3,7 +3,8 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { requireStaff } from "@/lib/api/requireSession";
 import { authorizeAttempt } from "@/lib/api/access";
-import { attemptIsTimed } from "@/lib/api/attemptDeadline";
+import { isWorkingTimeLimit, reopenNeedsEndTime } from "@/lib/api/attemptDeadline";
+import { AddMinutes } from "@/lib/api/extendAttempt";
 import { passBackAttempt } from "@/lib/api/passBackAttempt";
 import { UUID_RE } from "@/lib/uuid";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
@@ -25,6 +26,8 @@ const Body = z.object({
       message: "ends_at must be a parseable date",
     })
     .optional(),
+  /** Working-time clock (D4): optional minutes added with the pass back. */
+  add_minutes: AddMinutes.optional(),
   /** U-25 slice 3 (D-8): corrections mode for this pass back. */
   show_marks: z.boolean().optional(),
   lock_correct: z.boolean().optional(),
@@ -84,10 +87,12 @@ export async function POST(req: Request, ctx: RouteContext) {
   const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
   if (!bodyRead.ok) return bodyRead.response;
   let endsAt: Date | null = null;
+  let addMinutes: number | undefined;
   let corrections = { show_marks: false, lock_correct: false };
   try {
     const parsed = Body.parse(bodyRead.empty ? {} : bodyRead.parse());
     endsAt = parsed.ends_at ? new Date(Date.parse(parsed.ends_at)) : null;
+    addMinutes = parsed.add_minutes;
     corrections = {
       show_marks: parsed.show_marks ?? false,
       lock_correct: parsed.lock_correct ?? false,
@@ -108,7 +113,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   // would be the same "nobody can type" failure. A REMOVED limit (2026-09-24)
   // is not timed: the pass back asks for no deadline and the attempt keeps its
   // "No time limit" (`passBackAttempt` never touches the flag).
-  const timed = attemptIsTimed(attempt, assessment);
+  const timed = reopenNeedsEndTime(attempt, assessment);
 
   if (timed) {
     if (!endsAt) {
@@ -123,11 +128,20 @@ export async function POST(req: Request, ctx: RouteContext) {
     endsAt = null;
   }
 
+  // Working-time clock (D4): "+N minutes" only where there is a working-time
+  // clock to add to — not a wall-clock or untimed test, nor a removed limit.
+  if (addMinutes !== undefined && (attempt.time_limit_removed || !isWorkingTimeLimit(assessment))) {
+    return NextResponse.json(
+      { ok: false, error: "add_minutes_needs_working_time" },
+      { status: 400 },
+    );
+  }
+
   const { attempt: row, superseded_scores } = await passBackAttempt(
     db,
     attempt,
     auth.session.sub,
-    { endsAt, corrections },
+    { endsAt, corrections, addSeconds: addMinutes ? addMinutes * 60 : undefined },
   );
 
   return NextResponse.json({

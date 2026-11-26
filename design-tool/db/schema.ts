@@ -201,6 +201,10 @@ export const assessments = pgTable(
 export const STUDENT_FEEDBACK_LEVELS = ["off", "score", "right_wrong", "answers"] as const;
 export type StudentFeedbackLevel = (typeof STUDENT_FEEDBACK_LEVELS)[number];
 export const ANSWERS_RELEASE_MODES = ["at_hand_in", "on_release"] as const;
+
+/** Working-time clock (D1): `assessments.time_limit_mode`'s values. */
+export const TIME_LIMIT_MODES = ["working", "wall"] as const;
+export type TimeLimitMode = (typeof TIME_LIMIT_MODES)[number];
 export type AnswersReleaseMode = (typeof ANSWERS_RELEASE_MODES)[number];
 
 export const ASSIGNED_SCOPES = ["teacher", "school", "district"] as const;

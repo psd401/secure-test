@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { asc, count, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { attempts, items, type ItemType } from "@/db/schema";
+import { attempts, items, type ItemType, type TimeLimitMode } from "@/db/schema";
 import { loadItemSetsInOrder } from "@/lib/api/itemSets";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { AssessmentEditor } from "./AssessmentEditor";
@@ -102,6 +102,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
             status: assessment.status,
             allow_llm_authoring: assessment.allow_llm_authoring,
             time_limit_seconds: assessment.time_limit_seconds,
+            time_limit_mode: assessment.time_limit_mode as TimeLimitMode,
             student_layout: assessment.student_layout as "scroll" | "paged",
             student_feedback: assessment.student_feedback as FeedbackLevelSetting,
             answers_release: assessment.answers_release as AnswersReleaseSetting,

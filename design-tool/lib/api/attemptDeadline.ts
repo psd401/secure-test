@@ -107,6 +107,19 @@ export function deadlineFor(
 }
 
 /**
+ * Working-time clock: seconds spent so far, including the running gap since
+ * the last tick while the attempt is live (ticked within the 2 min cap).
+ */
+function timeSpent(
+  attempt: Pick<DeadlineAttempt, "working_seconds" | "last_tick_at">,
+  now: Date,
+): { live: boolean; spent: number } {
+  const sinceTick = attempt.last_tick_at ? now.getTime() - attempt.last_tick_at.getTime() : null;
+  const live = sinceTick !== null && sinceTick >= 0 && sinceTick <= CLOCK_GAP_CAP_SECONDS * 1000;
+  return { live, spent: attempt.working_seconds + (live ? sinceTick! / 1000 : 0) };
+}
+
+/**
  * Working-time clock (docs/working-time-clock-design.md): the deadline is
  * `now + time left`, where time left = limit + extension − time spent.
  *
@@ -124,9 +137,7 @@ export function deadlineFor(
  * `extension_seconds` (D3).
  */
 function workingDeadline(attempt: DeadlineAttempt, limit: number, now: Date): Date {
-  const sinceTick = attempt.last_tick_at ? now.getTime() - attempt.last_tick_at.getTime() : null;
-  const live = sinceTick !== null && sinceTick >= 0 && sinceTick <= CLOCK_GAP_CAP_SECONDS * 1000;
-  const spent = attempt.working_seconds + (live ? sinceTick! / 1000 : 0);
+  const { live, spent } = timeSpent(attempt, now);
   const left = limit + attempt.extension_seconds - spent;
   if (left > 0 || live) return new Date(now.getTime() + left * 1000);
   return new Date(now.getTime() - (DEADLINE_GRACE_SECONDS + 1) * 1000);
@@ -148,9 +159,7 @@ export function extensionForEndTime(
   now: Date = new Date(),
 ): number {
   const limit = assessment.time_limit_seconds ?? 0;
-  const sinceTick = attempt.last_tick_at ? now.getTime() - attempt.last_tick_at.getTime() : null;
-  const live = sinceTick !== null && sinceTick >= 0 && sinceTick <= CLOCK_GAP_CAP_SECONDS * 1000;
-  const spent = attempt.working_seconds + (live ? sinceTick! / 1000 : 0);
+  const { spent } = timeSpent(attempt, now);
   return Math.ceil((endsAt.getTime() - now.getTime()) / 1000 - limit + spent);
 }
 
@@ -171,14 +180,13 @@ export function workingTimeLeft(
   if (attempt.time_limit_removed) return null;
   const limit = assessment.time_limit_seconds;
   if (limit == null || limit <= 0 || assessment.time_limit_mode !== "working") return null;
-  const sinceTick = attempt.last_tick_at ? now.getTime() - attempt.last_tick_at.getTime() : null;
-  const live = sinceTick !== null && sinceTick >= 0 && sinceTick <= CLOCK_GAP_CAP_SECONDS * 1000;
-  const used = attempt.working_seconds + (live ? sinceTick! / 1000 : 0);
+  const { spent: used } = timeSpent(attempt, now);
   return { used, left: Math.max(0, limit + attempt.extension_seconds - used) };
 }
 
 /**
- * Pass back (docs/pass-back-design.md): does this attempt have a deadline AT
+ * Pass back (docs/pass-back-design.md): must a reopen of this attempt be
+ * given a new end time? True when it has a wall-clock deadline AT
  * ALL — a limit on the assessment or an override on the attempt — whatever
  * its status and whenever it falls. The pass-back route asks it to decide
  * whether a new deadline is required; the Monitor and the per-student page
@@ -187,11 +195,15 @@ export function workingTimeLeft(
  * timed, so a pass back neither asks for a deadline nor gives it one, and the
  * attempt stays removed.
  */
-export function attemptIsTimed(
+export function reopenNeedsEndTime(
   attempt: Pick<DeadlineAttempt, "deadline_override_at" | "time_limit_removed">,
   assessment: DeadlineAssessment,
 ): boolean {
   if (attempt.time_limit_removed) return false;
+  // Working-time clock (D4; `attemptIsTimed` until 2026-11-25): a pass back
+  // resumes the clock where it stopped, so it needs no end time; the dialog
+  // offers an optional "+N minutes" instead.
+  if (isWorkingTimeLimit(assessment)) return false;
   return (assessment.time_limit_seconds ?? 0) > 0 || attempt.deadline_override_at !== null;
 }
 

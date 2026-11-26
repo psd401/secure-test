@@ -23,8 +23,14 @@ export type ExtendTarget =
    * joiners are unaffected. */
   | { kind: "selected"; sessionId: string; attemptIds: string[] };
 
-/** The dialog's two choices (2026-09-24): an absolute deadline, or none. */
-export type ExtendChoice = "deadline" | "no_limit";
+/** The dialog's choices: an absolute deadline or none (2026-09-24), and on a
+ * working-time test "+N minutes" in place of the deadline (D3). */
+export type ExtendChoice = "deadline" | "no_limit" | "add";
+
+/** The "+N minutes" box's starting value. */
+export const DEFAULT_ADD_MINUTES = "10";
+/** Mirrors the routes' `MAX_ADD_MINUTES` (lib/api/extendAttempt.ts). */
+export const MAX_ADD_MINUTES = 600;
 
 async function readError(res: Response): Promise<ApiError> {
   let code = `http_${res.status}`;
@@ -67,6 +73,13 @@ export function extendHint(
   // an untimed test, "has" read as the student's current state.
   return "This student will have no time limit.";
   }
+  if (choice === "add") {
+    if (target === "sitting") {
+      return "Every student still in progress on this session gets this many more minutes.";
+    }
+    if (target === "selected") return "The selected students get this many more minutes.";
+    return "This student gets this many more minutes.";
+  }
   if (target === "sitting") {
     return "Every student still in progress on this session gets until this time.";
   }
@@ -103,6 +116,7 @@ export function extendRequest(
   target: ExtendTarget,
   choice: ExtendChoice,
   localValue: string,
+  addMinutes = "",
 ): { url: string; body: Record<string, unknown> } | null {
   const url =
     target.kind === "attempt"
@@ -111,6 +125,10 @@ export function extendRequest(
   let body: Record<string, unknown>;
   if (choice === "no_limit") {
     body = { no_limit: true };
+  } else if (choice === "add") {
+    const minutes = parseAddMinutes(addMinutes);
+    if (minutes === null) return null;
+    body = { add_minutes: minutes };
   } else {
     const endsAt = toIsoInstant(localValue);
     if (!endsAt) return null;
@@ -118,6 +136,17 @@ export function extendRequest(
   }
   if (target.kind === "selected") body.attempt_ids = target.attemptIds;
   return { url, body };
+}
+
+/**
+ * Working-time clock (D3): the "+N minutes" box as a whole number of minutes,
+ * 1…MAX_ADD_MINUTES, or null for anything else (the caller says so).
+ */
+export function parseAddMinutes(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const n = Number.parseInt(trimmed, 10);
+  return n >= 1 && n <= MAX_ADD_MINUTES ? n : null;
 }
 
 /**
@@ -168,8 +197,12 @@ export function shortensHint(
  * picking a deadline there says what it means. Pure for the same reason as
  * the hints above.
  */
-export function defaultExtendChoice(assessmentUntimed: boolean): ExtendChoice {
-  return assessmentUntimed ? "no_limit" : "deadline";
+export function defaultExtendChoice(
+  assessmentUntimed: boolean,
+  workingTime = false,
+): ExtendChoice {
+  if (assessmentUntimed) return "no_limit";
+  return workingTime ? "add" : "deadline";
 }
 
 export function untimedDeadlineWarning(
@@ -234,6 +267,7 @@ export function ExtendTimeControl({
   currentDeadlines,
   label = "Adjust time",
   assessmentUntimed = false,
+  workingTime = false,
   sittingEnded = false,
 }: {
   target: ExtendTarget;
@@ -246,6 +280,9 @@ export function ExtendTimeControl({
   /** The assessment has no time limit of its own: open on "No time limit"
    * and warn on a deadline (`untimedDeadlineWarning`). */
   assessmentUntimed?: boolean;
+  /** Working-time clock (D3): the test's limit counts time spent in it, so
+   * the dialog offers "+N minutes" instead of a new deadline. */
+  workingTime?: boolean;
   /** Row ES (D-4): the sitting has ended or been closed — show ENDED_SITTING_NOTE. */
   sittingEnded?: boolean;
   size?: "xs" | "sm" | "default";
@@ -253,6 +290,7 @@ export function ExtendTimeControl({
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
+  const [addMinutes, setAddMinutes] = useState(DEFAULT_ADD_MINUTES);
   const [choice, setChoice] = useState<ExtendChoice>("deadline");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -261,14 +299,19 @@ export function ExtendTimeControl({
   function openDialog() {
     setError(null);
     setValue(defaultExtendValue());
-    setChoice(defaultExtendChoice(assessmentUntimed));
+    setAddMinutes(DEFAULT_ADD_MINUTES);
+    setChoice(defaultExtendChoice(assessmentUntimed, workingTime));
     setOpen(true);
   }
 
   async function confirmExtend() {
-    const request = extendRequest(target, choice, value);
+    const request = extendRequest(target, choice, value, addMinutes);
     if (!request) {
-      setError("Pick a time in the future.");
+      setError(
+        choice === "add"
+          ? `Enter a whole number of minutes, 1 to ${MAX_ADD_MINUTES}.`
+          : "Pick a time in the future.",
+      );
       return;
     }
     setBusy(true);
@@ -328,24 +371,55 @@ export function ExtendTimeControl({
           ) : null}
           <fieldset className="space-y-2 text-sm" disabled={busy}>
             <legend className="sr-only">Time limit</legend>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="extend-choice"
-                value="deadline"
-                checked={choice === "deadline"}
-                onChange={() => setChoice("deadline")}
-              />
-              New deadline
-            </label>
-            <input
-              type="datetime-local"
-              value={value}
-              disabled={busy || choice !== "deadline"}
-              onChange={(e) => setValue(e.target.value)}
-              aria-label="New deadline"
-              className="ml-6 w-[calc(100%-1.5rem)] rounded-md border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
-            />
+            {workingTime ? (
+              <>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="extend-choice"
+                    value="add"
+                    checked={choice === "add"}
+                    onChange={() => setChoice("add")}
+                  />
+                  Add minutes
+                </label>
+                <span className="ml-6 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={MAX_ADD_MINUTES}
+                    step={1}
+                    value={addMinutes}
+                    disabled={busy || choice !== "add"}
+                    onChange={(e) => setAddMinutes(e.target.value)}
+                    aria-label="Minutes to add"
+                    className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
+                  />
+                  <span className="text-xs text-muted-foreground">more minutes</span>
+                </span>
+              </>
+            ) : (
+              <>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="extend-choice"
+                    value="deadline"
+                    checked={choice === "deadline"}
+                    onChange={() => setChoice("deadline")}
+                  />
+                  New deadline
+                </label>
+                <input
+                  type="datetime-local"
+                  value={value}
+                  disabled={busy || choice !== "deadline"}
+                  onChange={(e) => setValue(e.target.value)}
+                  aria-label="New deadline"
+                  className="ml-6 w-[calc(100%-1.5rem)] rounded-md border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
+                />
+              </>
+            )}
             <label className="flex items-center gap-2">
               <input
                 type="radio"

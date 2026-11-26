@@ -175,6 +175,7 @@ function row(overrides: Partial<ResultsRow> & Pick<ResultsRow, "attempt_id" | "c
     sitting_open: false,
     deadline_passed: false,
     deadline_at: null,
+    working_time: null,
     total_points: 0,
     scored_max_points: 0,
     unscored_count: 0,
