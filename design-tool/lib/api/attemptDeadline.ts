@@ -251,8 +251,15 @@ export async function refuseIfPastDeadline(
   db: Db,
   attempt: AttemptRow,
   now: Date = new Date(),
+  opts: { join?: boolean } = {},
 ): Promise<NextResponse | null> {
-  const deadline = await loadDeadline(db, attempt, now);
+  // Working-time clock: a join never counts the time since the last tick
+  // (`tickWorkingClock`, `join`), so its refusal must not count it either —
+  // judged as not live, on the stored total alone. A relaunch with 5 s left
+  // gets in; one with nothing left is refused (the fixed past instant). The
+  // wall clock never reads `last_tick_at`, so this changes nothing there.
+  const judged = opts.join ? { ...attempt, last_tick_at: null } : attempt;
+  const deadline = await loadDeadline(db, judged, now);
   if (!isPastDeadline(now, deadline)) return null;
   return NextResponse.json({ ok: false, error: "time_expired" }, { status: 409 });
 }

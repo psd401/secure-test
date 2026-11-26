@@ -123,7 +123,9 @@ export async function GET(req: Request, ctx: RouteContext) {
   // could not be opened" and no way home but Cmd-Q — so it keeps the old
   // 200 and its own countdown ends the session.
   if (attempt.status === "in_progress" && req.headers.has(CLIENT_VERSION_HEADER)) {
-    const expired = await refuseIfPastDeadline(db, attempt);
+    // `join`: the working-time clock's join rule (the stretch since the last
+    // tick is not test time), the same one the tick below applies.
+    const expired = await refuseIfPastDeadline(db, attempt, new Date(), { join: true });
     if (expired) return expired;
   }
 

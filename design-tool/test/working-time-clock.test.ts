@@ -13,6 +13,7 @@ import {
   deadlineFor,
   extensionForEndTime,
   isPastDeadline,
+  refuseIfPastDeadline,
   workingTimeLeft,
   type DeadlineAttempt,
 } from "../lib/api/attemptDeadline";
@@ -181,6 +182,25 @@ describe("tickWorkingClock", () => {
       await getDb().execute(sql`truncate table assessments restart identity cascade`);
       await getDb().execute(sql`truncate table students restart identity cascade`);
     }
+  });
+});
+
+describe("the join refusal agrees with the join rule (#250 re-review)", () => {
+  test("a relaunch inside the last gap is let in on the time the join leaves; nothing left is refused", async () => {
+    const { attempt: a } = await seed({ limit: 600 });
+    // 595 s counted at the last poll; the student quits and relaunches 60 s later.
+    await getDb()
+      .update(attempts)
+      .set({ working_seconds: 595, last_tick_at: ago(60) })
+      .where(eq(attempts.id, a.id));
+    const row = await reload(a.id);
+    // A poll would count the 60 s (live), so 655 > 600: past.
+    expect(await refuseIfPastDeadline(getDb(), row, NOW)).not.toBeNull();
+    // A join does not count them: 5 s left, so it gets in.
+    expect(await refuseIfPastDeadline(getDb(), row, NOW, { join: true })).toBeNull();
+    // With the limit already used up, the join is refused even inside the grace.
+    await getDb().update(attempts).set({ working_seconds: 605 }).where(eq(attempts.id, a.id));
+    expect(await refuseIfPastDeadline(getDb(), await reload(a.id), NOW, { join: true })).not.toBeNull();
   });
 });
 
