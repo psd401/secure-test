@@ -137,6 +137,20 @@ describe("/admin/usage gate", () => {
       for (const header of countHeaders) expect(header).toContain("whitespace-normal");
     });
 
+    test("a teacher with no email on record is labelled, not shown as a raw id", async () => {
+      process.env.ADMIN_EMAILS = ADMIN_EMAIL;
+      principal = staffPrincipal("usage-admin", ADMIN_EMAIL);
+      await getDb().insert(assessments).values({ owner_sub: SUBS[1]!, name: "Old", status: "draft" });
+      const html = renderToStaticMarkup(
+        await AdminUsagePage({ searchParams: Promise.resolve({ window: "all" }) }),
+      );
+      expect(html).toContain("No email on record");
+      expect(html).toContain("It fills in when they next open one.");
+      // The id stays in the title for an admin, but is not the visible label.
+      expect(html).toContain(`title="${SUBS[1]}"`);
+      expect(html).not.toContain(`>${SUBS[1]}<`);
+    });
+
     test("no match says so", async () => {
       expect(await render("nobody-here")).toContain("No teachers match.");
     });
