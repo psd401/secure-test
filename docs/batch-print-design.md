@@ -148,8 +148,10 @@ Design tool only; no migration; no client release.
   were committed to `main` on 2026-10-18 (`7ed7ef39` slice 1, `40b91518`
   slice 2, `f492cd14` slice 3) and are in production at least since the
   v2.0 deploy (server `27824b88`, 2026-10-24). Hand-run rows 615–626 ran on
-  local `_demo` 2026-10-18 (`d2ae275c`); row 623 (over 200 students) was
-  likely not exercisable there. Still open: the help topic's picture. The
+  local `_demo` 2026-10-18 (`d2ae275c`); row 623 (over 200 students)
+  was retired 2026-10-22, covered instead by `test/work-packet.test.ts`
+  "above the cap: no list, the count instead". Still open: the help topic's
+  picture. The
   "not committed" lines above were never updated, so the public roadmap
   kept listing this under Ahead until 2026-11-26.
 
