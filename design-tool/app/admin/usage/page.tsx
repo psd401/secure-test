@@ -56,11 +56,10 @@ function href(sort: UsageSort, usageWindow: UsageWindow, q: string): string {
   return `/admin/usage?${qs}`;
 }
 
-/** The admin all-assessments list, filtered to this teacher. */
 /**
- * A row with no email anywhere in the data (production 2026-11-26: 18 of 41,
- * each only the owner of assessments made before the OE-1 fix of 2026-10-23,
- * when New assessment did not save the owner's email). There is no staff
+ * A row with no email anywhere in the data: in production these are owners
+ * of assessments made before the OE-1 fix of 2026-10-23, when New assessment
+ * did not save the owner's email. There is no staff
  * directory to look one up in; `healAssessmentOwnerEmail` fills it in when
  * the owner next opens one. Says so instead of showing the raw Google `sub`,
  * which stays in the cell's title for an admin who needs it.
@@ -76,6 +75,7 @@ function NoEmail() {
   );
 }
 
+/** The admin all-assessments list, filtered to this teacher. */
 function assessmentsHref(email: string): string {
   return `/dashboard?${new URLSearchParams({ all: "1", owner: email.toLowerCase() })}`;
 }
