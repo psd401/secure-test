@@ -2893,3 +2893,17 @@ Mac. Core logic (`RejoinWait`, `JoinErrorCopy`) is covered by
 | **Opens on its own.** Teacher presses Let back in | Within about 10 s the test opens (secure session begins) without the student pressing anything; the saved answer is back | |
 | **Stops asking.** Repeat row 1 and leave it 10 minutes without Let back in | The page changes to "Your teacher hasn't let you back in yet." / "…then open the test again from Your tests."; no secure session; Let back in then re-opening from Your tests opens the test | |
 | **Real session.** Row 1–2 on the packaged build | Same as rows 1–2; `DID END` at hand-in as usual | |
+
+## A way home from the no-session failure notices (2026-11-26)
+
+Client release queue item 3. "This test could not be opened." and the rejoin
+give-up notice now carry an in-page "Back to your tests" button (posts on
+`home`, like the results page's Done). Both come before any secure session.
+Core logic (`NoticeHomeButton`) is covered by `NoticeHomeButtonTests`.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Give-up notice.** Let the 10-minute rejoin wait run out (slice 4 row 3), then press "Back to your tests" | The student lands on Your tests; the log shows `back to your tests pressed (in-page) — leaving the attempt screen` | |
+| **Keyboard.** On the same notice, press Return without touching the mouse | Same as the press: the button has focus on arrival | |
+| **Could not be opened.** Stop the dev server after the join, before the test loads (or otherwise make the bundle fetch fail), then press the button | "This test could not be opened." shows the button; the press lands on Your tests | |
+| **Not during a session.** Watch "Loading your test…" and "Still starting the secure session…" | No button on either | |

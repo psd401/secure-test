@@ -530,7 +530,8 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     self.log("rejoin: no Let back in within the wait — not starting the secure session")
                     self.loadHostPage(Self.noticePage(
                         JoinErrorCopy.rejoinGaveUpMessage,
-                        detail: JoinErrorCopy.rejoinGaveUpInformative))
+                        detail: JoinErrorCopy.rejoinGaveUpInformative,
+                        homeButton: true))
                 } catch let error as APIError where error.isSittingClosed {
                     // SEC-01 (server PR #94): the delivery route now refuses a
                     // closed sitting. The teacher closed it during the deferred
@@ -558,7 +559,8 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     )
                     self.loadHostPage(Self.noticePage(
                         "This test could not be opened.",
-                        detail: SessionEntryViewController.message(for: error)
+                        detail: SessionEntryViewController.message(for: error),
+                        homeButton: true
                     ))
                 }
             }
@@ -654,10 +656,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     }
     """
 
-    private static func noticePage(_ message: String, detail: String) -> String {
+    /// `homeButton` (client release queue item 3): only for a failure notice
+    /// shown before any secure session began — see `NoticeHomeButton`.
+    private static func noticePage(_ message: String, detail: String, homeButton: Bool = false) -> String {
         PageShell.document(
             title: Brand.productName,
-            styles: [noticeStyles],
+            styles: homeButton ? [noticeStyles, NoticeHomeButton.styles] : [noticeStyles],
+            scripts: homeButton ? [NoticeHomeButton.script] : [],
             body: """
             <div class="notice">
               <h1>\(HTMLEscape.text(Brand.productName))</h1>
@@ -665,6 +670,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                 <p class="notice-message">\(HTMLEscape.text(message))</p>
                 <p class="notice-detail">\(HTMLEscape.text(detail))</p>
               </div>
+              \(homeButton ? NoticeHomeButton.markup : "")
             </div>
             """
         )
