@@ -155,7 +155,7 @@ export async function GET(req: Request, ctx: RouteContext) {
   // continues) the clock. Ticked after every refusal above, so a refused join
   // never moves it; a long gap here is the time between sessions, never
   // counted and not logged.
-  const clocked = await tickWorkingClock(db, attempt, assessment, { logGap: false });
+  const clocked = await tickWorkingClock(db, attempt, assessment, { join: true });
 
   try {
     const { bundle, bundledCount } = await buildDeliveryBundle(

@@ -3,11 +3,13 @@
  * time spent in a test.
  *
  * Called by the two requests a student's app makes during a test: the
- * delivery request when it joins (`logGap: false` — a long gap there is the
- * time between sessions, which is never counted) and the 5 s peek poll during
- * the session (`logGap: true` — a long gap there is the network or a deploy,
- * Q4). Each tick adds the time since the last one when that gap is within
- * `CLOCK_GAP_CAP_SECONDS` (2 min), and moves `last_tick_at` to now.
+ * delivery request when it joins (`join: true`) and the 5 s peek poll during
+ * the session (`join: false`). A join only moves `last_tick_at` to now: the
+ * time since the last tick was spent outside the test (between sessions, or
+ * a quit and relaunch), however short, and is never counted. A poll adds the
+ * time since the last tick when that gap is within `CLOCK_GAP_CAP_SECONDS`
+ * (2 min); a longer gap inside a session is the network or a deploy (Q4), so
+ * it is not counted and is logged as `clock_gap`.
  *
  * Only an in-progress attempt on a working-time limit is written; every other
  * attempt (untimed, wall clock, limit removed, handed in) returns untouched,
@@ -23,7 +25,7 @@ import { CLOCK_GAP_CAP_SECONDS, type DeadlineAssessment } from "@/lib/api/attemp
 type Db = ReturnType<typeof getDb>;
 
 /** Does this attempt run on the working-time clock right now? */
-export function onWorkingClock(
+function onWorkingClock(
   attempt: Pick<AttemptRow, "status" | "time_limit_removed">,
   assessment: DeadlineAssessment,
 ): boolean {
@@ -39,7 +41,7 @@ export async function tickWorkingClock(
   db: Db,
   attempt: AttemptRow,
   assessment: DeadlineAssessment,
-  opts: { logGap: boolean },
+  opts: { join: boolean },
   now: Date = new Date(),
 ): Promise<AttemptRow> {
   if (!onWorkingClock(attempt, assessment)) return attempt;
@@ -58,8 +60,9 @@ export async function tickWorkingClock(
     if (!current || current.status !== "in_progress") return attempt;
     const gapMs = current.last_tick_at ? now.getTime() - current.last_tick_at.getTime() : null;
     const capMs = CLOCK_GAP_CAP_SECONDS * 1000;
-    const counted = gapMs !== null && gapMs >= 0 && gapMs <= capMs ? gapMs / 1000 : 0;
-    if (opts.logGap && gapMs !== null && gapMs > capMs) {
+    const counted =
+      !opts.join && gapMs !== null && gapMs >= 0 && gapMs <= capMs ? gapMs / 1000 : 0;
+    if (!opts.join && gapMs !== null && gapMs > capMs) {
       await tx.insert(attempt_events).values({
         attempt_id: attempt.id,
         kind: "clock_gap",

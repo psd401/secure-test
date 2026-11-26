@@ -81,7 +81,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   // are not written.
   const timeLimit = await loadTimeLimit(db, access.attempt);
   const clocked = timeLimit
-    ? await tickWorkingClock(db, access.attempt, timeLimit, { logGap: true })
+    ? await tickWorkingClock(db, access.attempt, timeLimit, { join: false })
     : access.attempt;
   const deadline = timeLimit ? deadlineFor(clocked, timeLimit) : null;
 

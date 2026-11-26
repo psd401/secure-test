@@ -130,40 +130,53 @@ const gaps = async (id: string) =>
 describe("tickWorkingClock", () => {
   test("the first tick starts the clock; later ticks within 2 min add the gap", async () => {
     const { assessment, attempt: a } = await seed();
-    let row = await tickWorkingClock(getDb(), a, assessment, { logGap: true }, NOW);
+    let row = await tickWorkingClock(getDb(), a, assessment, { join: false }, NOW);
     expect(row.working_seconds).toBe(0);
     expect(row.last_tick_at).toEqual(NOW);
-    row = await tickWorkingClock(getDb(), row, assessment, { logGap: true }, after(5));
-    row = await tickWorkingClock(getDb(), row, assessment, { logGap: true }, after(10));
+    row = await tickWorkingClock(getDb(), row, assessment, { join: false }, after(5));
+    row = await tickWorkingClock(getDb(), row, assessment, { join: false }, after(10));
     expect(row.working_seconds).toBe(10);
     expect(await gaps(a.id)).toHaveLength(0);
   });
 
   test("a gap over 2 min inside a session is not counted and is logged; at a join it is neither", async () => {
     const { assessment, attempt: a } = await seed();
-    let row = await tickWorkingClock(getDb(), a, assessment, { logGap: true }, NOW);
-    row = await tickWorkingClock(getDb(), row, assessment, { logGap: true }, after(200));
+    let row = await tickWorkingClock(getDb(), a, assessment, { join: false }, NOW);
+    row = await tickWorkingClock(getDb(), row, assessment, { join: false }, after(200));
     expect(row.working_seconds).toBe(0);
     const logged = await gaps(a.id);
     expect(logged.map((e) => [e.kind, e.detail])).toEqual([["clock_gap", { seconds: 200 }]]);
-    // A join (logGap false) after a day away: reset, not counted, not logged.
-    row = await tickWorkingClock(getDb(), row, assessment, { logGap: false }, after(86_400));
+    // A join after a day away: reset, not counted, not logged.
+    row = await tickWorkingClock(getDb(), row, assessment, { join: true }, after(86_400));
     expect(row.working_seconds).toBe(0);
     expect(await gaps(a.id)).toHaveLength(1);
   });
 
+  test("a join never counts the time since the last tick, even under 2 min (a quit and relaunch)", async () => {
+    const { assessment, attempt: a } = await seed();
+    let row = await tickWorkingClock(getDb(), a, assessment, { join: false }, NOW);
+    row = await tickWorkingClock(getDb(), row, assessment, { join: false }, after(5));
+    expect(row.working_seconds).toBe(5);
+    row = await tickWorkingClock(getDb(), row, assessment, { join: true }, after(65));
+    expect(row.working_seconds).toBe(5);
+    expect(row.last_tick_at).toEqual(after(65));
+    row = await tickWorkingClock(getDb(), row, assessment, { join: false }, after(70));
+    expect(row.working_seconds).toBe(10);
+    expect(await gaps(a.id)).toHaveLength(0);
+  });
+
   test("a stale caller copy cannot overwrite the stored total", async () => {
     const { assessment, attempt: a } = await seed();
-    await tickWorkingClock(getDb(), a, assessment, { logGap: true }, NOW);
-    await tickWorkingClock(getDb(), a, assessment, { logGap: true }, after(5)); // stale `a`
-    const row = await tickWorkingClock(getDb(), a, assessment, { logGap: true }, after(10)); // stale again
+    await tickWorkingClock(getDb(), a, assessment, { join: false }, NOW);
+    await tickWorkingClock(getDb(), a, assessment, { join: false }, after(5)); // stale `a`
+    const row = await tickWorkingClock(getDb(), a, assessment, { join: false }, after(10)); // stale again
     expect(row.working_seconds).toBe(10);
   });
 
   test("untimed, wall-clock and handed-in attempts are never written", async () => {
     for (const opts of [{ limit: null }, { mode: "wall" as const }, { status: "submitted" }]) {
       const { assessment, attempt: a } = await seed(opts);
-      await tickWorkingClock(getDb(), a, assessment, { logGap: true }, NOW);
+      await tickWorkingClock(getDb(), a, assessment, { join: false }, NOW);
       expect((await reload(a.id)).last_tick_at).toBeNull();
       await getDb().execute(sql`truncate table assessments restart identity cascade`);
       await getDb().execute(sql`truncate table students restart identity cascade`);
@@ -236,9 +249,29 @@ describe("migration 0074 backfill (D6, Q1)", () => {
     expect((await reload(a.id)).working_seconds).toBe(3600);
   });
 
-  test("handed-in and untimed attempts are left alone", async () => {
+  test("a handed-in attempt is credited too, and keeps its extension, so a pass back resumes the clock", async () => {
+    const db = getDb();
     const { attempt: done } = await seed({ status: "submitted" });
+    // Handed in 25 min after the start, no session events; extended 10 min.
+    await db
+      .update(attempts)
+      .set({
+        submitted_at: new Date(done.started_at.getTime() + 25 * 60_000),
+        deadline_override_at: new Date(done.started_at.getTime() + (3600 + 600) * 1000),
+      })
+      .where(eq(attempts.id, done.id));
+    for (const stmt of backfill) await db.execute(sql.raw(stmt));
+    const row = await reload(done.id);
+    expect(row.working_seconds).toBe(25 * 60);
+    expect(row.extension_seconds).toBe(600);
+  });
+
+  test("untimed attempts are left alone", async () => {
+    const { attempt: a } = await seed({ limit: null });
+    await getDb().update(attempts).set({ deadline_override_at: new Date() }).where(eq(attempts.id, a.id));
     for (const stmt of backfill) await getDb().execute(sql.raw(stmt));
-    expect((await reload(done.id)).working_seconds).toBe(0);
+    const row = await reload(a.id);
+    expect(row.working_seconds).toBe(0);
+    expect(row.extension_seconds).toBe(0);
   });
 });
