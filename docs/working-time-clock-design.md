@@ -80,6 +80,21 @@ same-period relaunch; the multi-day share is not measured.
 
 ## Rejoin approval (D2)
 
+**As built (slice 3, James 2026-11-25, 3.1–3.3)** — supersedes the
+"working_seconds > 0 and last tick older than 60 s" rule below:
+
+- Approval is needed only to come back into the **same** sitting after
+  leaving it: `attempts.last_join_session_id` records the sitting of the last
+  admitted join, and a join to the attempt's current sitting when they match
+  waits. The first join to a new sitting is free (3.2: a new session is the
+  teacher's approval; day 2 is not 30 clicks), and a pass back clears it so
+  the next join is free (3.1).
+- A join within 60 s of the last tick is a reload, not a rejoin.
+- Only a client sending `X-SecureTest-Version` (v1.5.0+) is refused (3.3, as
+  EX-2); an older one is admitted, since it dead-ends on a 409.
+- Practice attempts never wait. `rejoin_requested_at` drives "Asks to
+  continue" (and Needs attention); one `rejoin_requested` event per request.
+
 - **When it applies:** a working-time attempt with `working_seconds > 0`,
   asking for its delivery bundle when its last tick is older than 60 s (it is
   not mid-session; a reload within a live session is not a rejoin).
@@ -179,6 +194,18 @@ same-period relaunch; the multi-day share is not measured.
   (option `join`, was `logGap`); the Q1 override conversion and the D6 credit
   cover handed-in attempts too. Load: one small row update per student on a
   timed test every 5 s — about 20 writes/s at 100 concurrent students.
+- 2026-11-25: **slice 3 BUILT** (not merged or deployed). Migration
+  `0075_rejoin_approval.sql`: `attempts.last_join_session_id`,
+  `rejoin_approved_until`, `rejoin_requested_at`; event kinds
+  `rejoin_requested` / `rejoin_approved` (server-written).
+  `lib/api/rejoinApproval.ts` (`needsRejoinApproval`, `admitJoin` under a row
+  lock, `approveRejoin`); the delivery route gates the join after every other
+  refusal (409 `rejoin_needs_approval`); `POST
+  /api/attempts/:id/let-back-in` (run + write; 409 `not_in_progress` /
+  `not_working_time`). Pass back clears the join record and any approval.
+  Monitor: "Asks to continue" counts as Needs attention, with a **Let back
+  in** button; "Let back in — they can rejoin for 10 min" after. Timeline and
+  help words. Tests: `test/rejoin-approval.test.ts`.
 - **Deploy note:** slice 1 alone changes every timed test to working time
   with no teacher-facing setting, no Monitor used/left and no rejoin approval
   (so a student can quit and rejoin an open sitting with the clock paused).

@@ -898,6 +898,18 @@ export const attempts = pgTable(
     // Extra time on a working-time test (D3, D4): added to the limit. A wall
     // clock test keeps using `deadline_override_at`.
     extension_seconds: integer("extension_seconds").notNull().default(0),
+    // Rejoin approval (docs/working-time-clock-design.md, D2, slice 3): the
+    // sitting this attempt last joined. Coming back into the SAME sitting
+    // after leaving it needs the teacher's approval; the first join to a new
+    // sitting does not (3.2), and a pass back clears it so the next join is
+    // free (3.1). Null until the first join after the slice 3 deploy.
+    last_join_session_id: uuid("last_join_session_id"),
+    // The teacher's "Let back in": a rejoin before this instant is admitted
+    // once (Q3: 10 minutes, one use), then cleared.
+    rejoin_approved_until: timestamp("rejoin_approved_until", { withTimezone: true }),
+    // The student asked to come back in and was refused; the Monitor shows
+    // "Asks to continue". Cleared when they are let back in.
+    rejoin_requested_at: timestamp("rejoin_requested_at", { withTimezone: true }),
     // Pass back (docs/pass-back-design.md, D-1): how many times a teacher has
     // put this handed-in attempt back to `in_progress` so the student could
     // keep working. 0 on every row that has never been passed back, which is
@@ -1044,6 +1056,10 @@ export const ATTEMPT_EVENT_KINDS = [
   // than 2 minutes between two clock ticks inside one session — not counted
   // as working time. `detail` is { seconds }. Server-written by the tick.
   "clock_gap",
+  // Rejoin approval (D2): a refused rejoin waiting for the teacher, and the
+  // teacher's "Let back in" (`detail.by`). Server-written.
+  "rejoin_requested",
+  "rejoin_approved",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
@@ -1079,6 +1095,10 @@ export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   // Not a staff action, but server-written by the clock tick: a client that
   // could post one could claim it was offline when it was not.
   "clock_gap",
+  // Rejoin approval (D2): a client that could post `rejoin_approved` could
+  // let itself back in on the timeline; `rejoin_requested` is the server's.
+  "rejoin_requested",
+  "rejoin_approved",
 ] as const;
 export type StaffOnlyAttemptEventKind = (typeof STAFF_ONLY_ATTEMPT_EVENT_KINDS)[number];
 export type ClientAttemptEventKind = Exclude<AttemptEventKind, StaffOnlyAttemptEventKind>;
@@ -1123,7 +1143,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed', 'feedback_shown', 'answer_restored', 'feedback_edited', 'clock_gap')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed', 'feedback_shown', 'answer_restored', 'feedback_edited', 'clock_gap', 'rejoin_requested', 'rejoin_approved')`,
     ),
   }),
 );

@@ -27,6 +27,7 @@ import {
 import { IncompleteItemError } from "@/lib/api/itemIntegrity";
 import { deadlineFor, refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import { tickWorkingClock } from "@/lib/api/workingClock";
+import { admitJoin } from "@/lib/api/rejoinApproval";
 import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import { UUID_RE } from "@/lib/uuid";
 import { currentRenderer } from "@/lib/renderer/current";
@@ -157,6 +158,15 @@ export async function GET(req: Request, ctx: RouteContext) {
   // continues) the clock. Ticked after every refusal above, so a refused join
   // never moves it; a long gap here is the time between sessions, never
   // counted and not logged.
+  // Rejoin approval (D2, slice 3): coming back into the same session after
+  // leaving it waits for the teacher's "Let back in". After every other
+  // refusal, so a join refused for another reason records no request; only
+  // for a client that can show the 409 (3.3, as EX-2 above).
+  const refusedRejoin = await admitJoin(db, attempt, assessment, {
+    enforce: req.headers.has(CLIENT_VERSION_HEADER),
+  });
+  if (refusedRejoin) return refusedRejoin;
+
   const clocked = await tickWorkingClock(db, attempt, assessment, { join: true });
 
   try {

@@ -138,6 +138,11 @@ export async function passBackAttempt(
         submitted_by_sub: null,
         pass_back_count: sql`${attempts.pass_back_count} + 1`,
         corrections,
+        // Rejoin approval (3.1): the pass back is the teacher's approval, so
+        // the next join is the first since it, and needs no "Let back in".
+        last_join_session_id: null,
+        rejoin_approved_until: null,
+        rejoin_requested_at: null,
         // Only when the caller has one: an unlimited assessment must not gain a
         // deadline it never had, and a `null` here would ERASE an extension on
         // a timed one.

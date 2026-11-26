@@ -55,6 +55,8 @@ export interface AttendanceRow {
   time_limit_removed: boolean;
   /** Working-time clock (D5): see lib/api/sittingAttendance.ts. */
   working_time: { used_seconds: number; left_seconds: number } | null;
+  /** Rejoin approval (D2): see lib/api/sittingAttendance.ts. */
+  rejoin: "asked" | "approved" | null;
   /** Safeguarding alerts slice 2: open alerts on this row's attempt. Only the
    * Monitor's attendance route sends it; absent = 0. */
   safeguarding_open?: number;
@@ -220,6 +222,11 @@ export function eventLabel(kind: string): string {
     // more than 2 minutes inside a session, not counted as test time.
     case "clock_gap":
       return "Offline — not counted as test time";
+    // Rejoin approval (D2): a refused rejoin, and the teacher's approval.
+    case "rejoin_requested":
+      return "Asked to continue";
+    case "rejoin_approved":
+      return "Let back in by teacher";
     // Feedback release (docs/feedback-release-design.md, D-4 / D-12): a teacher
     // saved or cleared their written feedback. Which question, and whether it
     // was saved or cleared, is on the row's detail and spelled out by the
@@ -374,6 +381,13 @@ export function selectAllState(
  */
 export const TIME_RAN_OUT_NOTE = "Time ran out — use Adjust time to let them continue";
 
+/** Rejoin approval (D2): the Monitor row's line, or null. */
+export function rejoinNote(rejoin: "asked" | "approved" | null): string | null {
+  if (rejoin === "asked") return "Asks to continue";
+  if (rejoin === "approved") return "Let back in — they can rejoin for 10 min";
+  return null;
+}
+
 /**
  * Working-time clock (D5): "12 of 60 min used · 48 left". Used rounds down and
  * left rounds up, so a student with 30 s left still reads "1 left", not 0.
@@ -441,6 +455,8 @@ export function studentState(r: AttendanceRow, now: number): StudentState {
   if (r.status === "submitted" || r.status === "submitted_earlier")
     return "handed_in";
   if (alertIsCurrent(r)) return "needs_attention";
+  // Rejoin approval (D2): a student waiting on "Let back in" needs the teacher.
+  if (r.rejoin === "asked") return "needs_attention";
   if (idleFor(r, now) !== null) return "idle";
   if (r.status === "in_progress") return "in_progress";
   return "not_joined";
