@@ -526,6 +526,13 @@
       "when": 1795656669509,
       "tag": "0074_working_time_clock",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1795672305076,
+      "tag": "0075_rejoin_approval",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@
 // attention" only until the student is back at work, then as history; the
 // peek is a real dialog. The attendance transport and the peek lifecycle
 // (delete-on-read, discard-on-close) are unchanged.
+import { LetBackInControl } from "@/components/app/LetBackInControl";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -78,6 +79,7 @@ import {
   closeDialogCopy,
   countInProgress,
   deadlineNote,
+  rejoinNote,
   eventLabel,
   earlierSessionNote,
   endedSessionBanner,
@@ -838,13 +840,28 @@ function StudentRow({
               {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed, r.working_time)}
             </span>
           ) : null}
+          {/* Rejoin approval (D2): the student left and asks to come back
+              in; or was let back in and has not rejoined yet. */}
+          {!earlier && rejoinNote(r.rejoin) ? (
+            <span
+              className={
+                r.rejoin === "asked"
+                  ? "text-xs font-medium text-warning-foreground"
+                  : "text-xs text-muted-foreground"
+              }
+            >
+              {rejoinNote(r.rejoin)}
+            </span>
+          ) : null}
           {/* Speech-to-text (2026-10-01): the pre-flight on the student's
               Mac did not come back ready, so they have no "Speak my
               answer". A note, not an alert — nothing to act on mid-test. */}
           {speechNote ? (
             <span className="text-xs text-muted-foreground">{speechNote}</span>
           ) : null}
-          {r.alert && current ? (
+          {/* `alertIsCurrent`, not `current`: a waiting rejoin also makes the
+              row need attention (D2), and an old alert must not read as new. */}
+          {r.alert && alertIsCurrent(r) ? (
             <span className="text-xs text-danger-foreground">
               {eventLabel(r.alert.kind)} · {ago(r.alert.at, now)}
             </span>
@@ -888,6 +905,9 @@ function StudentRow({
             ) : null}
             {earlier ? null : (
               <>
+                {r.rejoin === "asked" ? (
+                  <LetBackInControl attemptId={r.attempt_id} onApproved={onDeleted} />
+                ) : null}
                 <ViewScreenControl
                   attemptId={r.attempt_id}
                   studentName={r.name}

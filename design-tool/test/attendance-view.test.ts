@@ -43,6 +43,7 @@ function row(over: Partial<AttendanceRow>): AttendanceRow {
     passed_back_waiting: false,
     time_limit_removed: false,
     working_time: null,
+    rejoin: null,
     ...over,
   };
 }

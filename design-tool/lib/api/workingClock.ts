@@ -25,7 +25,7 @@ import { CLOCK_GAP_CAP_SECONDS, type DeadlineAssessment } from "@/lib/api/attemp
 type Db = ReturnType<typeof getDb>;
 
 /** Does this attempt run on the working-time clock right now? */
-function onWorkingClock(
+export function onWorkingClock(
   attempt: Pick<AttemptRow, "status" | "time_limit_removed">,
   assessment: DeadlineAssessment,
 ): boolean {

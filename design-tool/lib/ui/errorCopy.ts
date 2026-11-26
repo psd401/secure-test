@@ -367,6 +367,26 @@ export function extendErrorCopy(code: string): ErrorCopy {
   }
 }
 
+/** POST /api/attempts/[attemptId]/let-back-in — rejoin approval (D2). */
+export function letBackInErrorCopy(code: string): ErrorCopy {
+  switch (code) {
+    case "not_in_progress":
+      return { message: "Already handed in.", showCode: false };
+    case "not_working_time":
+      return { message: "This test's clock doesn't pause, so no approval is needed.", showCode: false };
+    case "not_found":
+    case "forbidden":
+      return { message: "Not yours to let back in.", showCode: false };
+    case "network":
+      return {
+        message: "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
+    default:
+      return { message: code, showCode: false };
+  }
+}
+
 /**
  * POST /api/attempts/[attemptId]/pass-back — the teacher's "Pass back"
  * (docs/pass-back-design.md).

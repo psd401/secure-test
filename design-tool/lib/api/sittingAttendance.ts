@@ -111,6 +111,10 @@ export interface AttendanceRow {
    * the limit used and left, for a joined in-progress attempt on a
    * working-time test. Null on every other row. */
   working_time: { used_seconds: number; left_seconds: number } | null;
+  /** Rejoin approval (D2): "asked" — the student tried to come back in and
+   * waits for "Let back in"; "approved" — let back in, not yet rejoined
+   * (within the 10 minutes). Null otherwise, and on every row not in progress. */
+  rejoin: "asked" | "approved" | null;
   /** Slice 91: the newest client-reported event, whatever its kind. Null on a
    * `submitted_earlier` row: its events belong to the earlier sitting. */
   last_event: AttendanceEvent | null;
@@ -352,6 +356,11 @@ export async function attendanceForSitting(
     const w = workingTimeLeft(hit.attempt, timeLimit, now);
     return w ? { used_seconds: Math.floor(w.used), left_seconds: Math.ceil(w.left) } : null;
   };
+  const rejoinOf = (hit: (typeof joined)[number]): "asked" | "approved" | null => {
+    if (hit.attempt.status !== "in_progress") return null;
+    if (hit.attempt.rejoin_approved_until && hit.attempt.rejoin_approved_until > now) return "approved";
+    return hit.attempt.rejoin_requested_at ? "asked" : null;
+  };
   // Remove time limit (2026-09-24): shown only while the attempt is still in
   // progress, the same rule `deadline_at` follows.
   const removedOf = (hit: (typeof joined)[number]) =>
@@ -491,6 +500,7 @@ export async function attendanceForSitting(
       passed_back_waiting: !hit && passedBackWaiting.has(psId),
       time_limit_removed: hit ? removedOf(hit) : false,
       working_time: hit ? workingOf(hit) : null,
+      rejoin: hit ? rejoinOf(hit) : null,
       speech_to_text_unavailable: hit ? speechUnavailable.has(hit.attempt.id) : false,
     });
   }
@@ -516,6 +526,7 @@ export async function attendanceForSitting(
       passed_back_waiting: false,
       time_limit_removed: removedOf(hit),
       working_time: workingOf(hit),
+      rejoin: rejoinOf(hit),
       speech_to_text_unavailable: speechUnavailable.has(hit.attempt.id),
     });
   }
@@ -550,6 +561,7 @@ export async function attendanceForSitting(
         passed_back_waiting: false,
         time_limit_removed: false,
         working_time: null,
+        rejoin: null,
         speech_to_text_unavailable: false,
       });
     }
