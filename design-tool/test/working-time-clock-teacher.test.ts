@@ -283,6 +283,29 @@ describe("pass back on a working-time test (D4)", () => {
     expect(((await res.json()) as { error: string }).error).toBe("ends_at_required");
   });
 
+  test("an end time sent on a working-time test is ignored: the clock resumes, nothing is set", async () => {
+    const { attempt } = await scenario({ status: "submitted", working: 1500 });
+    const res = await passBackOne(attempt.id, { ends_at: new Date(Date.now() + 3_600_000).toISOString() });
+    expect(res.status).toBe(200);
+    const after = await row(attempt.id);
+    expect(after.deadline_override_at).toBeNull();
+    expect(after.extension_seconds).toBe(0);
+    expect(after.working_seconds).toBe(1500);
+  });
+
+  test("a removed limit stays removed: minutes are refused for one, skipped in bulk", async () => {
+    const { assessment, attempt } = await scenario({ status: "submitted" });
+    await getDb().update(attempts).set({ time_limit_removed: true }).where(eq(attempts.id, attempt.id));
+    const one = await passBackOne(attempt.id, { add_minutes: 10 });
+    expect(((await one.json()) as { error: string }).error).toBe("add_minutes_needs_working_time");
+    const many = await passBackMany(assessment.id, { attempt_ids: [attempt.id], add_minutes: 10 });
+    expect(many.status).toBe(200);
+    const after = await row(attempt.id);
+    expect(after.status).toBe("in_progress");
+    expect(after.time_limit_removed).toBe(true);
+    expect(after.extension_seconds).toBe(0);
+  });
+
   test("the bulk route adds the minutes to each", async () => {
     const { assessment, attempt } = await scenario({ status: "submitted" });
     const res = await passBackMany(assessment.id, { attempt_ids: [attempt.id], add_minutes: 5 });

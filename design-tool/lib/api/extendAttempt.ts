@@ -124,22 +124,26 @@ export async function extendAttempt(
     // Working-time clock (D3): added to what the student already has, in the
     // UPDATE itself so two presses add twice rather than racing. Adding time
     // also puts a removed limit back, as an end time does.
-    const [row] = await db
-      .update(attempts)
-      .set({
-        extension_seconds: sql`${attempts.extension_seconds} + ${target.addSeconds}`,
-        time_limit_removed: false,
-        updated_at: now,
-      })
-      .where(eq(attempts.id, attempt.id))
-      .returning();
-    await db.insert(attempt_events).values({
-      attempt_id: attempt.id,
-      kind: "deadline_extended",
-      at: now,
-      detail: { add_seconds: target.addSeconds, by: staffSub },
+    // One transaction: added time with no audit row is the one outcome the
+    // event exists to prevent (#253 review).
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(attempts)
+        .set({
+          extension_seconds: sql`${attempts.extension_seconds} + ${target.addSeconds}`,
+          time_limit_removed: false,
+          updated_at: now,
+        })
+        .where(eq(attempts.id, attempt.id))
+        .returning();
+      await tx.insert(attempt_events).values({
+        attempt_id: attempt.id,
+        kind: "deadline_extended",
+        at: now,
+        detail: { add_seconds: target.addSeconds, by: staffSub },
+      });
+      return { attempt: row! };
     });
-    return { attempt: row! };
   }
   const noLimit = "noLimit" in target;
   // Working-time clock (docs/working-time-clock-design.md, D3; slice 1

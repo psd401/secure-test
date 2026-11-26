@@ -107,6 +107,19 @@ export function deadlineFor(
 }
 
 /**
+ * Working-time clock: seconds spent so far, including the running gap since
+ * the last tick while the attempt is live (ticked within the 2 min cap).
+ */
+function timeSpent(
+  attempt: Pick<DeadlineAttempt, "working_seconds" | "last_tick_at">,
+  now: Date,
+): { live: boolean; spent: number } {
+  const sinceTick = attempt.last_tick_at ? now.getTime() - attempt.last_tick_at.getTime() : null;
+  const live = sinceTick !== null && sinceTick >= 0 && sinceTick <= CLOCK_GAP_CAP_SECONDS * 1000;
+  return { live, spent: attempt.working_seconds + (live ? sinceTick! / 1000 : 0) };
+}
+
+/**
  * Working-time clock (docs/working-time-clock-design.md): the deadline is
  * `now + time left`, where time left = limit + extension − time spent.
  *
@@ -123,19 +136,6 @@ export function deadlineFor(
  * `deadline_override_at` is not read: a working-time test extends with
  * `extension_seconds` (D3).
  */
-/**
- * Working-time clock: seconds spent so far, including the running gap since
- * the last tick while the attempt is live (ticked within the 2 min cap).
- */
-function timeSpent(
-  attempt: Pick<DeadlineAttempt, "working_seconds" | "last_tick_at">,
-  now: Date,
-): { live: boolean; spent: number } {
-  const sinceTick = attempt.last_tick_at ? now.getTime() - attempt.last_tick_at.getTime() : null;
-  const live = sinceTick !== null && sinceTick >= 0 && sinceTick <= CLOCK_GAP_CAP_SECONDS * 1000;
-  return { live, spent: attempt.working_seconds + (live ? sinceTick! / 1000 : 0) };
-}
-
 function workingDeadline(attempt: DeadlineAttempt, limit: number, now: Date): Date {
   const { live, spent } = timeSpent(attempt, now);
   const left = limit + attempt.extension_seconds - spent;

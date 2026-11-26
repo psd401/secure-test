@@ -66,8 +66,9 @@ same-period relaunch; the multi-day share is not measured.
   it to `working_seconds`, else record a `clock_gap` event; set
   `last_tick_at = now`. A crash or quit loses at most one gap. Joining (the
   delivery route) sets `last_tick_at = now` without adding time, however short
-  the gap (a quit and relaunch is not test time). Untimed and wall-clock attempts never write, so the poll
-  stays read-only for them. **No client change.**
+  the gap (a quit and relaunch is not test time). Untimed and wall-clock
+  attempts never write, so the poll stays read-only for them. **No client
+  change.**
 - **The deadline** (working time) =
   `now + max(0, limit + extension_seconds − working_seconds)`, recomputed on
   each request. During a session it stays steady; between sessions it moves
