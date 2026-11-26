@@ -154,19 +154,23 @@ export async function GET(req: Request, ctx: RouteContext) {
     await sectionsForAttempt(db, assessment, attempt, resolved.student.roster_ps_id),
   );
 
-  // Working-time clock: joining starts (or, on a reload mid-session,
-  // continues) the clock. Ticked after every refusal above, so a refused join
-  // never moves it; a long gap here is the time between sessions, never
-  // counted and not logged.
   // Rejoin approval (D2, slice 3): coming back into the same session after
-  // leaving it waits for the teacher's "Let back in". After every other
-  // refusal, so a join refused for another reason records no request; only
-  // for a client that can show the 409 (3.3, as EX-2 above).
+  // leaving it waits for the teacher's "Let back in"; only for a client that
+  // can show the 409 (3.3, as EX-2 above). After every refusal above, so a
+  // join refused for those reasons records no request and uses up no
+  // approval. The two refusals below (`client_update_required`, and the
+  // corrections/incomplete-item ones) need the built bundle, which needs the
+  // ticked clock, so they come after: a join refused there has used up a
+  // "Let back in" (#254 review, nit 1 — accepted: a rare case, and the
+  // teacher can press it again once the Mac is updated).
   const refusedRejoin = await admitJoin(db, attempt, assessment, {
     enforce: req.headers.has(CLIENT_VERSION_HEADER),
   });
   if (refusedRejoin) return refusedRejoin;
 
+  // Working-time clock: joining starts (or, on a reload mid-session,
+  // continues) the clock. A join never counts the gap since the last tick
+  // (between sessions, or a quit and relaunch) and does not log it.
   const clocked = await tickWorkingClock(db, attempt, assessment, { join: true });
 
   try {
