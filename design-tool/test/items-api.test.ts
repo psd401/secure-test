@@ -4,7 +4,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
 import { ItemBundleSchema } from "@secure-test/schema";
-import { items } from "../db/schema";
+import { assessments, items } from "../db/schema";
 import { effectiveScoringMethod } from "../lib/api/items";
 import { setNewAuthoring } from "../lib/authoring/flag";
 import type { SessionPayload } from "../lib/auth/session";
@@ -1974,6 +1974,38 @@ describe("B1 — item points", () => {
     const patch = await patchItem(aid, created.item.id, { ...SAMPLE_MC, points: 2 });
     expect(patch.status).toBe(400);
     expect((await patchItem(aid, created.item.id, { ...SAMPLE_MC, points: null })).status).toBe(200);
+  });
+
+  test("D6 under concurrency: a weighted save that waits on a conversion is refused", async () => {
+    // #245 review: the routes' early read cannot see a conversion still in
+    // flight; the write's transaction re-decides under the assessment's row
+    // lock (lib/api/competencyLock.ts). Hold a conversion open with that lock,
+    // start a weighted save (it must wait), then commit the conversion.
+    asUser("teacher-1");
+    const aid = await createAssessment("race");
+    let locked!: () => void;
+    let release!: () => void;
+    const isLocked = new Promise<void>((r) => (locked = r));
+    const gate = new Promise<void>((r) => (release = r));
+    const conversion = getDb().transaction(async (tx) => {
+      await tx.select().from(assessments).where(eq(assessments.id, aid)).for("update");
+      await tx.update(assessments).set({ competency_pass_min_points: 3 }).where(eq(assessments.id, aid));
+      locked();
+      await gate;
+    });
+    await isLocked;
+    const save = createItem(aid, { ...SAMPLE_MC, points: 2 });
+    await new Promise((r) => setTimeout(r, 150)); // the save is now blocked on the lock
+    release();
+    await conversion;
+    const res = await save;
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe("points_not_allowed_on_competency");
+    const weighted = await getDb()
+      .select({ id: items.id })
+      .from(items)
+      .where(eq(items.assessment_id, aid));
+    expect(weighted).toHaveLength(0);
   });
 
   test("export carries points only when set; Duplicate keeps them", async () => {

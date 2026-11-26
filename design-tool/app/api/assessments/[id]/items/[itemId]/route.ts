@@ -5,6 +5,7 @@ import { assessments, item_sets, items, responses } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { isAnswerKeyOnlyPatch, requireDraftStatus } from "@/lib/api/requireDraft";
 import { itemConfigForWrite, parseItemBody, pointsNotAllowedResponse, wantsEmptyStem } from "@/lib/api/items";
+import { lockAssessmentForPoints } from "@/lib/api/competencyLock";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
@@ -137,6 +138,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   // History → Restore) always copies, so a restore can itself be undone.
   const restore = new URL(req.url).searchParams.get("restore") === "1";
   const updated = await db.transaction(async (tx) => {
+    // B1 D6: re-decided under the assessment's row lock (lib/api/competencyLock.ts),
+    // taken before the item's own lock — always assessment, then item.
+    if (body.points != null && (await lockAssessmentForPoints(tx, id)) === true) return "competency" as const;
     // The content this write replaces, read under a row lock: two saves at
     // once (two open tabs) would otherwise share one "before", and the
     // history would miss the first save's version.
@@ -166,6 +170,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     await captureItemSnapshot(tx, before, row, { force: restore });
     return row;
   });
+  if (updated === "competency") return pointsNotAllowedResponse();
   // Deleted between the access check and the write.
   if (!updated) return notFoundResponse();
   await db
