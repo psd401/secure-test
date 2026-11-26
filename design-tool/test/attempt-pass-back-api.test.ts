@@ -115,6 +115,7 @@ async function scenario(
       name: "Pass back",
       status: "published",
       time_limit_seconds: opts.timeLimitSeconds ?? null,
+      time_limit_mode: "wall",
     })
     .returning();
   const [mc] = await db

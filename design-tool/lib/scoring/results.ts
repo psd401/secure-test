@@ -323,11 +323,17 @@ export async function buildResults(
   // One select, because the deadline is per attempt (`started_at + limit`)
   // but the limit is per assessment.
   const [assessmentRow] = await db
-    .select({ time_limit_seconds: assessments.time_limit_seconds })
+    .select({
+      time_limit_seconds: assessments.time_limit_seconds,
+      time_limit_mode: assessments.time_limit_mode,
+    })
     .from(assessments)
     .where(eq(assessments.id, assessmentId))
     .limit(1);
-  const timeLimit = { time_limit_seconds: assessmentRow?.time_limit_seconds ?? null };
+  const timeLimit = {
+    time_limit_seconds: assessmentRow?.time_limit_seconds ?? null,
+    time_limit_mode: assessmentRow?.time_limit_mode ?? "working",
+  };
   const now = new Date();
 
   const attemptRows = await db

@@ -26,6 +26,7 @@ import {
 } from "@/lib/api/buildDeliveryBundle";
 import { IncompleteItemError } from "@/lib/api/itemIntegrity";
 import { deadlineFor, refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
+import { tickWorkingClock } from "@/lib/api/workingClock";
 import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import { UUID_RE } from "@/lib/uuid";
 import { currentRenderer } from "@/lib/renderer/current";
@@ -150,6 +151,12 @@ export async function GET(req: Request, ctx: RouteContext) {
     await sectionsForAttempt(db, assessment, attempt, resolved.student.roster_ps_id),
   );
 
+  // Working-time clock: joining starts (or, on a reload mid-session,
+  // continues) the clock. Ticked after every refusal above, so a refused join
+  // never moves it; a long gap here is the time between sessions, never
+  // counted and not logged.
+  const clocked = await tickWorkingClock(db, attempt, assessment, { logGap: false });
+
   try {
     const { bundle, bundledCount } = await buildDeliveryBundle(
       db,
@@ -160,7 +167,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       // Time limit (D-2): `started_at + time_limit_seconds`, per attempt, so
       // a relaunch or a resume in a later sitting counts down to the same
       // instant. Null — and no new bundle keys — when there is no limit.
-      deadlineFor(attempt, assessment),
+      deadlineFor(clocked, assessment),
       // Passage highlighting rides only to a 2.0+ client (H-1: never refused).
       req.headers.get(CLIENT_VERSION_HEADER),
       onlyItemSetId,

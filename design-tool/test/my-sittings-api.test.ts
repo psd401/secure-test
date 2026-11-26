@@ -259,7 +259,7 @@ describe("GET /api/me/sittings", () => {
     principal = staffPrincipal(TEACHER);
     const a = await seedAssessment(TEACHER, "Timed");
     const db = getDb();
-    await db.update(assessments).set({ time_limit_seconds: 600 }).where(eq(assessments.id, a.id));
+    await db.update(assessments).set({ time_limit_seconds: 600, time_limit_mode: "wall" }).where(eq(assessments.id, a.id));
     const sitting = await createSitting({ assessment_id: a.id });
     const [overlay] = await db
       .insert(students)

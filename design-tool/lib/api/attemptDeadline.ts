@@ -29,6 +29,13 @@ type Db = ReturnType<typeof getDb>;
 /** The grace after the deadline in which a write is still accepted. */
 export const DEADLINE_GRACE_SECONDS = 30;
 
+/**
+ * Working-time clock (docs/working-time-clock-design.md, Q4): the longest gap
+ * between two clock ticks inside one session that still counts as working
+ * time. Longer gaps are not counted and are logged as `clock_gap`.
+ */
+export const CLOCK_GAP_CAP_SECONDS = 120;
+
 export interface DeadlineAttempt {
   started_at: Date;
   /**
@@ -46,10 +53,21 @@ export interface DeadlineAttempt {
    * counting a student down whose limit the teacher had removed.
    */
   time_limit_removed: boolean;
+  /**
+   * Working-time clock (docs/working-time-clock-design.md): seconds counted
+   * so far, the instant they were counted to, and the extra seconds a teacher
+   * granted. Required, like the two above, so a narrow select cannot drop
+   * them and quietly fall back to the wrong clock.
+   */
+  working_seconds: number;
+  last_tick_at: Date | null;
+  extension_seconds: number;
 }
 
 export interface DeadlineAssessment {
   time_limit_seconds: number | null;
+  /** `working` | `wall` (D1). Required for the same reason. */
+  time_limit_mode: string;
 }
 
 /**
@@ -76,12 +94,87 @@ export interface DeadlineAssessment {
 export function deadlineFor(
   attempt: DeadlineAttempt,
   assessment: DeadlineAssessment,
+  now: Date = new Date(),
 ): Date | null {
   if (attempt.time_limit_removed) return null;
-  if (attempt.deadline_override_at) return attempt.deadline_override_at;
   const limit = assessment.time_limit_seconds;
+  if (limit != null && limit > 0 && assessment.time_limit_mode === "working") {
+    return workingDeadline(attempt, limit, now);
+  }
+  if (attempt.deadline_override_at) return attempt.deadline_override_at;
   if (limit == null || limit <= 0) return null;
   return new Date(attempt.started_at.getTime() + limit * 1000);
+}
+
+/**
+ * Working-time clock (docs/working-time-clock-design.md): the deadline is
+ * `now + time left`, where time left = limit + extension − time spent.
+ *
+ * Time spent includes the stretch since the last tick when the attempt is
+ * live (that tick is within the gap cap), so the deadline holds steady during
+ * a session instead of drifting by up to one poll interval. Between sessions
+ * the clock is paused, so the deadline moves later with `now` — the point of
+ * the feature. Once time is used up:
+ *   - live: `now + time left` is already in the past and moves further past
+ *     as the student keeps going, so the shared 30 s grace still applies to
+ *     the autosave in flight at the buzzer;
+ *   - not live: a fixed "certainly past" instant, so a student whose time ran
+ *     out cannot rejoin through the grace.
+ * `deadline_override_at` is not read: a working-time test extends with
+ * `extension_seconds` (D3).
+ */
+function workingDeadline(attempt: DeadlineAttempt, limit: number, now: Date): Date {
+  const sinceTick = attempt.last_tick_at ? now.getTime() - attempt.last_tick_at.getTime() : null;
+  const live = sinceTick !== null && sinceTick >= 0 && sinceTick <= CLOCK_GAP_CAP_SECONDS * 1000;
+  const spent = attempt.working_seconds + (live ? sinceTick! / 1000 : 0);
+  const left = limit + attempt.extension_seconds - spent;
+  if (left > 0 || live) return new Date(now.getTime() + left * 1000);
+  return new Date(now.getTime() - (DEADLINE_GRACE_SECONDS + 1) * 1000);
+}
+
+/**
+ * Working-time clock, slice 1 compatibility: the Extend time and pass-back
+ * dialogs still send an end time ("until 10:45"). On a working-time test that
+ * becomes the `extension_seconds` that makes the clock end then if the
+ * student works from `now` without a break:
+ *   now + (limit + ext − spent) = endsAt  ⇒  ext = (endsAt − now) − limit + spent.
+ * Rounded up to whole seconds. An end time earlier than the current one
+ * shortens the time, as it does on the wall clock.
+ */
+export function extensionForEndTime(
+  attempt: DeadlineAttempt,
+  assessment: DeadlineAssessment,
+  endsAt: Date,
+  now: Date = new Date(),
+): number {
+  const limit = assessment.time_limit_seconds ?? 0;
+  const sinceTick = attempt.last_tick_at ? now.getTime() - attempt.last_tick_at.getTime() : null;
+  const live = sinceTick !== null && sinceTick >= 0 && sinceTick <= CLOCK_GAP_CAP_SECONDS * 1000;
+  const spent = attempt.working_seconds + (live ? sinceTick! / 1000 : 0);
+  return Math.ceil((endsAt.getTime() - now.getTime()) / 1000 - limit + spent);
+}
+
+/** Working-time clock: is this assessment's limit counted as working time? */
+export function isWorkingTimeLimit(assessment: DeadlineAssessment): boolean {
+  return (assessment.time_limit_seconds ?? 0) > 0 && assessment.time_limit_mode === "working";
+}
+
+/**
+ * Working-time clock: seconds of the limit left, for the Monitor (D5) — null
+ * when this attempt is not on a working-time limit.
+ */
+export function workingTimeLeft(
+  attempt: DeadlineAttempt,
+  assessment: DeadlineAssessment,
+  now: Date = new Date(),
+): { used: number; left: number } | null {
+  if (attempt.time_limit_removed) return null;
+  const limit = assessment.time_limit_seconds;
+  if (limit == null || limit <= 0 || assessment.time_limit_mode !== "working") return null;
+  const sinceTick = attempt.last_tick_at ? now.getTime() - attempt.last_tick_at.getTime() : null;
+  const live = sinceTick !== null && sinceTick >= 0 && sinceTick <= CLOCK_GAP_CAP_SECONDS * 1000;
+  const used = attempt.working_seconds + (live ? sinceTick! / 1000 : 0);
+  return { used, left: Math.max(0, limit + attempt.extension_seconds - used) };
 }
 
 /**
@@ -119,18 +212,31 @@ export function isPastDeadline(
   return now.getTime() > deadline.getTime() + graceSeconds * 1000;
 }
 
+/** The time-limit fields of this attempt's assessment, or null if it is gone. */
+export async function loadTimeLimit(
+  db: Pick<Db, "select">,
+  attempt: Pick<AttemptRow, "assessment_id">,
+): Promise<DeadlineAssessment | null> {
+  const [assessment] = await db
+    .select({
+      time_limit_seconds: assessments.time_limit_seconds,
+      time_limit_mode: assessments.time_limit_mode,
+    })
+    .from(assessments)
+    .where(eq(assessments.id, attempt.assessment_id))
+    .limit(1);
+  return assessment ?? null;
+}
+
 /** This attempt's deadline, read from its own assessment. Null = no limit. */
 export async function loadDeadline(
   db: Db,
   attempt: AttemptRow,
+  now: Date = new Date(),
 ): Promise<Date | null> {
-  const [assessment] = await db
-    .select({ time_limit_seconds: assessments.time_limit_seconds })
-    .from(assessments)
-    .where(eq(assessments.id, attempt.assessment_id))
-    .limit(1);
+  const assessment = await loadTimeLimit(db, attempt);
   if (!assessment) return null;
-  return deadlineFor(attempt, assessment);
+  return deadlineFor(attempt, assessment, now);
 }
 
 /**
@@ -146,7 +252,7 @@ export async function refuseIfPastDeadline(
   attempt: AttemptRow,
   now: Date = new Date(),
 ): Promise<NextResponse | null> {
-  const deadline = await loadDeadline(db, attempt);
+  const deadline = await loadDeadline(db, attempt, now);
   if (!isPastDeadline(now, deadline)) return null;
   return NextResponse.json({ ok: false, error: "time_expired" }, { status: 409 });
 }

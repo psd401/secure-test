@@ -34,6 +34,7 @@ import {
   type AttemptRow,
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
+import { extensionForEndTime, isWorkingTimeLimit, loadTimeLimit } from "@/lib/api/attemptDeadline";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -90,6 +91,15 @@ export async function passBackAttempt(
   const corrections = correctionsFor(options.corrections, now);
   const previouslySubmittedAt = attempt.submitted_at;
 
+  // Working-time clock (D4; slice 1 compatibility): the clock resumes where
+  // it stopped (`working_seconds` is kept); an end time from the dialog
+  // becomes extra seconds, as Extend time does.
+  const timeLimit = endsAt ? await loadTimeLimit(db, attempt) : null;
+  const extension =
+    endsAt && timeLimit && isWorkingTimeLimit(timeLimit)
+      ? extensionForEndTime(attempt, timeLimit, endsAt, now)
+      : null;
+
   return db.transaction(async (tx) => {
     const responseRows = await tx
       .select({ id: responses.id })
@@ -132,6 +142,7 @@ export async function passBackAttempt(
         // deadline it never had, and a `null` here would ERASE an extension on
         // a timed one.
         ...(endsAt ? { deadline_override_at: endsAt } : {}),
+        ...(extension !== null ? { extension_seconds: extension } : {}),
         updated_at: now,
       })
       .where(eq(attempts.id, attempt.id))
@@ -149,6 +160,7 @@ export async function passBackAttempt(
         previously_submitted_at: previouslySubmittedAt?.toISOString() ?? null,
         superseded_scores: supersededScores,
         ends_at: endsAt?.toISOString() ?? null,
+        ...(extension !== null ? { extension_seconds: extension } : {}),
         // Slice 3: what the student was told to work on, for the audit trail
         // — only when asked, so a plain pass back's event is unchanged.
         ...(corrections

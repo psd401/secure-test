@@ -91,6 +91,7 @@ async function seedSitting(opts: {
       owner_sub: OWNER,
       name: "Extend everyone",
       time_limit_seconds: opts.timeLimitSeconds ?? null,
+      time_limit_mode: "wall",
     })
     .returning();
   await db.insert(items).values({

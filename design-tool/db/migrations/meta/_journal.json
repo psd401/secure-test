@@ -519,6 +519,13 @@
       "when": 1795637198709,
       "tag": "0073_item_points",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1795656669509,
+      "tag": "0074_working_time_clock",
+      "breakpoints": true
     }
   ]
 }

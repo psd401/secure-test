@@ -30,6 +30,7 @@ import {
   type TestSessionRow,
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
+import { extensionForEndTime, isWorkingTimeLimit, loadTimeLimit } from "@/lib/api/attemptDeadline";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -86,12 +87,26 @@ export async function extendAttempt(
   now: Date = new Date(),
 ): Promise<ExtendResult> {
   const noLimit = "noLimit" in target;
+  // Working-time clock (docs/working-time-clock-design.md, D3; slice 1
+  // compatibility): on a working-time test the end time becomes extra
+  // seconds on the limit. The end time is still stored, so the row says what
+  // the teacher chose and a switch back to wall clock keeps it.
+  const timeLimit = noLimit ? null : await loadTimeLimit(db, attempt);
+  const extension =
+    !noLimit && timeLimit && isWorkingTimeLimit(timeLimit)
+      ? extensionForEndTime(attempt, timeLimit, target.endsAt, now)
+      : null;
   const [row] = await db
     .update(attempts)
     .set(
       noLimit
         ? { time_limit_removed: true, deadline_override_at: null, updated_at: now }
-        : { deadline_override_at: target.endsAt, time_limit_removed: false, updated_at: now },
+        : {
+            deadline_override_at: target.endsAt,
+            time_limit_removed: false,
+            ...(extension !== null ? { extension_seconds: extension } : {}),
+            updated_at: now,
+          },
     )
     .where(eq(attempts.id, attempt.id))
     .returning();
@@ -108,7 +123,11 @@ export async function extendAttempt(
     at: now,
     detail: noLimit
       ? { no_limit: true, by: staffSub }
-      : { ends_at: target.endsAt.toISOString(), by: staffSub },
+      : {
+          ends_at: target.endsAt.toISOString(),
+          by: staffSub,
+          ...(extension !== null ? { extension_seconds: extension } : {}),
+        },
   });
 
   return { attempt: row! };

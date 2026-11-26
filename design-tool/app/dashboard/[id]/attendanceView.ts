@@ -214,6 +214,10 @@ export function eventLabel(kind: string): string {
     // an earlier version of a text answer the current one.
     case "answer_restored":
       return "Answer restored by teacher";
+    // Working-time clock (docs/working-time-clock-design.md, Q4): a gap of
+    // more than 2 minutes inside a session, not counted as test time.
+    case "clock_gap":
+      return "Offline — not counted as test time";
     // Feedback release (docs/feedback-release-design.md, D-4 / D-12): a teacher
     // saved or cleared their written feedback. Which question, and whether it
     // was saved or cleared, is on the row's detail and spelled out by the

@@ -1211,7 +1211,7 @@ describe("GET /api/assessments/:id/delivery — time_limit_ends_at / server_now"
     const { attempt } = await admitStudent(id);
     await getDb()
       .update(assessments)
-      .set({ time_limit_seconds: 1800 })
+      .set({ time_limit_seconds: 1800, time_limit_mode: "wall" })
       .where(eq(assessments.id, id));
 
     const body = await (await getDelivery(id)).json();
@@ -1231,7 +1231,7 @@ describe("GET /api/assessments/:id/delivery — time_limit_ends_at / server_now"
     await admitStudent(id);
     await getDb()
       .update(assessments)
-      .set({ time_limit_seconds: 600 })
+      .set({ time_limit_seconds: 600, time_limit_mode: "wall" })
       .where(eq(assessments.id, id));
     const first = await (await getDelivery(id)).json();
     const second = await (await getDelivery(id)).json();
@@ -1243,7 +1243,7 @@ describe("GET /api/assessments/:id/delivery — time_limit_ends_at / server_now"
     await admitStudent(id);
     await getDb()
       .update(assessments)
-      .set({ time_limit_seconds: 0 })
+      .set({ time_limit_seconds: 0, time_limit_mode: "wall" })
       .where(eq(assessments.id, id));
     const body = await (await getDelivery(id)).json();
     expect(body).not.toHaveProperty("time_limit_ends_at");
@@ -1257,7 +1257,7 @@ describe("GET /api/assessments/:id/delivery — time_limit_ends_at / server_now"
     const { attempt } = await admitStudent(id);
     await getDb()
       .update(assessments)
-      .set({ time_limit_seconds: 600 })
+      .set({ time_limit_seconds: 600, time_limit_mode: "wall" })
       .where(eq(assessments.id, id));
     const override = new Date(Date.now() + 90 * 60_000);
     await getDb()

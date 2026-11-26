@@ -69,6 +69,14 @@ export function speechPreflightText(detail: Record<string, unknown> | null | und
   return prefix;
 }
 
+/** `clock_gap` (working-time clock, Q4): "Offline 4 min — not counted as test time". */
+function clockGapText(detail: unknown): string {
+  const seconds = (detail as { seconds?: unknown } | null)?.seconds;
+  if (typeof seconds !== "number" || !(seconds > 0)) return eventLabel("clock_gap");
+  const minutes = Math.round(seconds / 60);
+  return `Offline ${minutes < 1 ? "under a minute" : `${minutes} min`} — not counted as test time`;
+}
+
 /** `feedback_edited`: "Overall feedback cleared by teacher" and the like. */
 export function feedbackEditedText(detail: Record<string, unknown> | null | undefined): string {
   const what = detail?.scope === "overall" ? "Overall feedback" : "Feedback";
@@ -119,6 +127,8 @@ function lineText(event: TimelineEvent): string {
       // the text (D-14). A row without a readable detail gets the monitor's
       // words.
       return feedbackEditedText(event.detail);
+    case "clock_gap":
+      return clockGapText(event.detail);
     case "lockdown_failed":
     case "lockdown_interrupted":
       // The monitor's words, deliberately shared rather than re-typed.

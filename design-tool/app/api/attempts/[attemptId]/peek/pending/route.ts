@@ -5,7 +5,8 @@ import { peek_requests } from "@/db/schema";
 import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { attemptSittingIsOver } from "@/lib/api/sittingOver";
-import { loadDeadline } from "@/lib/api/attemptDeadline";
+import { deadlineFor, loadTimeLimit } from "@/lib/api/attemptDeadline";
+import { tickWorkingClock } from "@/lib/api/workingClock";
 import { PEEK_PENDING_TTL_MS, sweepExpiredPeekImages } from "@/lib/api/peek";
 import { UUID_RE } from "@/lib/uuid";
 
@@ -75,7 +76,14 @@ export async function GET(_req: Request, ctx: RouteContext) {
     .limit(1);
 
   const over = await attemptSittingIsOver(db, access.attempt);
-  const deadline = await loadDeadline(db, access.attempt);
+  // Working-time clock: the poll is the clock's tick during a session (a gap
+  // over 2 minutes is logged, not counted). Untimed and wall-clock attempts
+  // are not written.
+  const timeLimit = await loadTimeLimit(db, access.attempt);
+  const clocked = timeLimit
+    ? await tickWorkingClock(db, access.attempt, timeLimit, { logGap: true })
+    : access.attempt;
+  const deadline = timeLimit ? deadlineFor(clocked, timeLimit) : null;
 
   return NextResponse.json({
     ok: true,

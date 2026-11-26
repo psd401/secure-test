@@ -326,7 +326,7 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     // An hour allowed, thirty minutes in: still running.
     await db
       .update(assessments)
-      .set({ time_limit_seconds: 60 * 60 })
+      .set({ time_limit_seconds: 60 * 60, time_limit_mode: "wall" })
       .where(eq(assessments.id, a.id));
     byId = await read();
     expect(byId.get(STUDENT.ps_id)!.deadline_passed).toBe(false);
@@ -334,7 +334,7 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     // Ten minutes allowed, thirty minutes in: past the deadline and its grace.
     await db
       .update(assessments)
-      .set({ time_limit_seconds: 10 * 60 })
+      .set({ time_limit_seconds: 10 * 60, time_limit_mode: "wall" })
       .where(eq(assessments.id, a.id));
     byId = await read();
     expect(byId.get(STUDENT.ps_id)!.deadline_passed).toBe(true);
@@ -389,7 +389,7 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     // Ten minutes allowed, thirty minutes in: past, and the instant says when.
     await db
       .update(assessments)
-      .set({ time_limit_seconds: 10 * 60 })
+      .set({ time_limit_seconds: 10 * 60, time_limit_mode: "wall" })
       .where(eq(assessments.id, a.id));
     byId = await read();
     expect(byId.get(STUDENT.ps_id)!.deadline_at).toBe(
