@@ -364,7 +364,23 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                         self.log("deferred flush completed after the attempt screen went away — bundle not fetched")
                         return
                     }
-                    let (bundle, json) = try await client.fetchBundle(assessmentID: assessmentID)
+                    // Working-time clock slice 4 (D2): a same-sitting rejoin
+                    // on a working-time test is refused 409
+                    // `rejoin_needs_approval` until the teacher presses "Let
+                    // back in". Refused here, before begin() — so the wait
+                    // holds no secure session — and asked again on its own.
+                    let (bundle, json) = try await RejoinWait.run(
+                        shouldContinue: { [weak self] in self.map { !$0.isRetired } ?? false },
+                        onWaiting: { [weak self] in
+                            guard let self else { return }
+                            self.log("rejoin: waiting for the teacher's Let back in — retrying every 10 s")
+                            self.loadHostPage(Self.noticePage(
+                                JoinErrorCopy.rejoinWaitingMessage,
+                                detail: JoinErrorCopy.rejoinWaitingInformative))
+                        }
+                    ) {
+                        try await client.fetchBundle(assessmentID: assessmentID)
+                    }
                     guard !self.isRetired else {
                         self.log("bundle fetch completed after the attempt screen went away — discarded")
                         return
@@ -506,6 +522,15 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     guard !self.isRetired else { return }
                     self.log("time limit: server refused the bundle (time_expired) — not starting the secure session")
                     self.onTimeRanOutBeforeStart?("server")
+                } catch let error as APIError where error.isRejoinNeedsApproval {
+                    // Slice 4: still not let back in when `RejoinWait` stopped
+                    // asking (or the screen went away). Expected, so no error
+                    // log line; lockdown was never begun.
+                    guard !self.isRetired else { return }
+                    self.log("rejoin: no Let back in within the wait — not starting the secure session")
+                    self.loadHostPage(Self.noticePage(
+                        JoinErrorCopy.rejoinGaveUpMessage,
+                        detail: JoinErrorCopy.rejoinGaveUpInformative))
                 } catch let error as APIError where error.isSittingClosed {
                     // SEC-01 (server PR #94): the delivery route now refuses a
                     // closed sitting. The teacher closed it during the deferred

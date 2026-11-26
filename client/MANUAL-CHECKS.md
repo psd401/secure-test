@@ -2877,3 +2877,19 @@ queues drain) none recurred.
 | **Stuck write at hand-in.** Proxy on arm; type an answer so the autosave's PUT trips the stall; click Hand in after ~5 s | Hand-in is refused ("answers still unsent") within about 40 s (estimate) of the stuck write starting (its 20 s, then hand-in's own retry of it, 20 s), not two minutes; the answer is still on the Mac | ✅ 2026-11-09: stuck write at 0 s; Hand in at +5 s sent its own write of the answer, which also stalled; `submit refused: 1 answers still unsent` at +25 s; the spool still held the answer and the server had none. Faster than the 40 s estimate, because hand-in's write did not wait for the stuck one |
 | **Recovers.** Set the proxy to normal and hand in again | Hand-in goes through; the teacher's view shows the latest answer | ✅ 2026-11-09: proxy back on normal; hand-in went through at once, and the attempt is submitted with the answer typed in row 3 |
 | **Normal network.** Real AAC session, packaged build, no proxy; answer every question and hand in | Unchanged from before: autosave and hand-in feel as fast as they did | ✅ 2026-11-09 (in part): three real AAC sessions on the signed v2.0.3 against production each began, saved, handed in and ended (`DID END`), with no refusals or client errors logged; speed was not rated separately |
+
+## Working-time clock slice 4 — waiting for "Let back in" (2026-11-26)
+
+Needs the dev server (or staging) at server `a8f309e1` or later, a test set
+to the working-time clock (Settings → Clock), an open sitting and a demo
+student. The refusal comes at the bundle fetch, before begin(), so the wait
+itself holds no secure session; rows 1–3 can run simulated, row 4 locks the
+Mac. Core logic (`RejoinWait`, `JoinErrorCopy`) is covered by
+`RejoinWaitTests`.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Asks to come back.** Join, answer one question, quit the app; wait over a minute; relaunch and open the test again | The page reads "Your teacher needs to let you back in." / "Ask them, then this will open on its own."; no secure session begins; the log shows `rejoin: waiting for the teacher's Let back in`; the teacher's Monitor shows "Asks to continue" | |
+| **Opens on its own.** Teacher presses Let back in | Within about 10 s the test opens (secure session begins) without the student pressing anything; the saved answer is back | |
+| **Stops asking.** Repeat row 1 and leave it 10 minutes without Let back in | The page changes to "Your teacher hasn't let you back in yet." / "…then open the test again from Your tests."; no secure session; Let back in then re-opening from Your tests opens the test | |
+| **Real session.** Row 1–2 on the packaged build | Same as rows 1–2; `DID END` at hand-in as usual | |
