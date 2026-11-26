@@ -317,12 +317,17 @@ export async function attendanceForSitting(
   // T-2: the assessment's time limit, read once — the deadline is per attempt
   // (`started_at + limit`), the limit is per assessment.
   const [assessmentRow] = await db
-    .select({ time_limit_seconds: assessments.time_limit_seconds, assigned_scope: assessments.assigned_scope })
+    .select({
+      time_limit_seconds: assessments.time_limit_seconds,
+      time_limit_mode: assessments.time_limit_mode,
+      assigned_scope: assessments.assigned_scope,
+    })
     .from(assessments)
     .where(eq(assessments.id, sitting.assessment_id))
     .limit(1);
   const timeLimit = {
     time_limit_seconds: assessmentRow?.time_limit_seconds ?? null,
+    time_limit_mode: assessmentRow?.time_limit_mode ?? "working",
   };
   const now = new Date();
   const deadlineOf = (hit: (typeof joined)[number]) =>

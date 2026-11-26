@@ -85,6 +85,7 @@ async function seedAttempt(
       owner_sub: OWNER,
       name: "Extend",
       time_limit_seconds: opts.timeLimitSeconds ?? null,
+      time_limit_mode: "wall",
     })
     .returning();
   const [mc] = await db

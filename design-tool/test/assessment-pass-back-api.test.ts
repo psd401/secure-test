@@ -102,6 +102,7 @@ async function seed(opts: { timeLimitSeconds?: number | null; attempts: SeedAtte
       owner_sub: OWNER,
       name: "Pass back everyone",
       time_limit_seconds: opts.timeLimitSeconds ?? null,
+      time_limit_mode: "wall",
     })
     .returning();
   const [mc] = await db

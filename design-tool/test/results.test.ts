@@ -381,7 +381,7 @@ describe("buildResults", () => {
       if (opts.limitSeconds !== undefined) {
         await db
           .update(assessments)
-          .set({ time_limit_seconds: opts.limitSeconds })
+          .set({ time_limit_seconds: opts.limitSeconds, time_limit_mode: "wall" })
           .where(eq(assessments.id, assessmentId));
       }
       await db.insert(attempts).values({
@@ -429,7 +429,7 @@ describe("buildResults", () => {
       const { db, assessment } = await seedResultsScenario();
       await db
         .update(assessments)
-        .set({ time_limit_seconds: 60 })
+        .set({ time_limit_seconds: 60, time_limit_mode: "wall" })
         .where(eq(assessments.id, assessment.id));
       const results = await buildResults(assessment.id, {
         include_in_progress: true,
@@ -456,7 +456,7 @@ describe("buildResults", () => {
       if (opts.limitSeconds !== undefined) {
         await db
           .update(assessments)
-          .set({ time_limit_seconds: opts.limitSeconds })
+          .set({ time_limit_seconds: opts.limitSeconds, time_limit_mode: "wall" })
           .where(eq(assessments.id, assessmentId));
       }
       await db.insert(attempts).values({

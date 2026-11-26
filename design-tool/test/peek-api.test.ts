@@ -256,7 +256,7 @@ describe("GET /api/attempts/:id/peek/pending (student poll)", () => {
   test("a timed attempt carries both keys; a teacher override replaces the deadline", async () => {
     const a = await seedAssessment();
     const db = getDb();
-    await db.update(assessments).set({ time_limit_seconds: 600 }).where(eq(assessments.id, a.id));
+    await db.update(assessments).set({ time_limit_seconds: 600, time_limit_mode: "wall" }).where(eq(assessments.id, a.id));
     const attempt = await seedAttempt(a.id, STUDENT.ps_id);
     principal = studentPrincipal(STUDENT.email);
 
@@ -296,7 +296,7 @@ describe("GET /api/attempts/:id/peek/pending (student poll)", () => {
   test("a removed time limit reports time_limit_removed and no deadline keys", async () => {
     const a = await seedAssessment();
     const db = getDb();
-    await db.update(assessments).set({ time_limit_seconds: 600 }).where(eq(assessments.id, a.id));
+    await db.update(assessments).set({ time_limit_seconds: 600, time_limit_mode: "wall" }).where(eq(assessments.id, a.id));
     const attempt = await seedAttempt(a.id, STUDENT.ps_id);
     principal = studentPrincipal(STUDENT.email);
 

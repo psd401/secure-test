@@ -991,7 +991,7 @@ describe("in-progress attempts on the teacher surfaces", () => {
     if (opts.limitSeconds !== undefined) {
       await db
         .update(assessments)
-        .set({ time_limit_seconds: opts.limitSeconds })
+        .set({ time_limit_seconds: opts.limitSeconds, time_limit_mode: "wall" })
         .where(eq(assessments.id, assessmentId));
     }
     await db.insert(responses).values({

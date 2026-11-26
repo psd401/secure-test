@@ -52,6 +52,12 @@ export const assessments = pgTable(
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
     time_limit_seconds: integer("time_limit_seconds"),
+    // Working-time clock (docs/working-time-clock-design.md, D1): how a timed
+    // test's limit is counted. `working` = time spent in the test, across
+    // sessions (paused between them); `wall` = the original clock-time rule,
+    // `started_at + time_limit_seconds`. Read only when the limit is > 0.
+    // Q1: existing timed tests moved to `working` at the migration.
+    time_limit_mode: text("time_limit_mode").notNull().default("working"),
     allow_llm_authoring: boolean("allow_llm_authoring").notNull().default(false),
     // Slice 69: may a student cut, copy or paste during this assessment?
     //
@@ -162,6 +168,10 @@ export const assessments = pgTable(
     competencyPassMinCheck: check(
       "assessments_competency_pass_min_check",
       sql`competency_pass_min_points IS NULL OR competency_pass_min_points >= 0`,
+    ),
+    timeLimitModeCheck: check(
+      "assessments_time_limit_mode_check",
+      sql`time_limit_mode IN ('working', 'wall')`,
     ),
     studentLayoutCheck: check(
       "assessments_student_layout_check",
@@ -874,6 +884,16 @@ export const attempts = pgTable(
     // override is: it must survive the finding-8.2 rebind. False = the normal
     // rules apply.
     time_limit_removed: boolean("time_limit_removed").notNull().default(false),
+    // Working-time clock (docs/working-time-clock-design.md): seconds spent in
+    // the test, counted by the server from the client's 5 s peek poll and the
+    // delivery request (lib/api/workingClock.ts). Gaps over 2 minutes inside a
+    // session are not counted (Q4) and are logged as `clock_gap`.
+    working_seconds: doublePrecision("working_seconds").notNull().default(0),
+    // The last instant the clock counted to; null until the first join.
+    last_tick_at: timestamp("last_tick_at", { withTimezone: true }),
+    // Extra time on a working-time test (D3, D4): added to the limit. A wall
+    // clock test keeps using `deadline_override_at`.
+    extension_seconds: integer("extension_seconds").notNull().default(0),
     // Pass back (docs/pass-back-design.md, D-1): how many times a teacher has
     // put this handed-in attempt back to `in_progress` so the student could
     // keep working. 0 on every row that has never been passed back, which is
@@ -1016,6 +1036,10 @@ export const ATTEMPT_EVENT_KINDS = [
   // written by the feedback routes only: a client that could post one could
   // plant a line claiming a teacher wrote feedback they never wrote.
   "feedback_edited",
+  // Working-time clock (docs/working-time-clock-design.md, Q4): a gap of more
+  // than 2 minutes between two clock ticks inside one session — not counted
+  // as working time. `detail` is { seconds }. Server-written by the tick.
+  "clock_gap",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
@@ -1048,6 +1072,9 @@ export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   "feedback_shown",
   "answer_restored",
   "feedback_edited",
+  // Not a staff action, but server-written by the clock tick: a client that
+  // could post one could claim it was offline when it was not.
+  "clock_gap",
 ] as const;
 export type StaffOnlyAttemptEventKind = (typeof STAFF_ONLY_ATTEMPT_EVENT_KINDS)[number];
 export type ClientAttemptEventKind = Exclude<AttemptEventKind, StaffOnlyAttemptEventKind>;
@@ -1092,7 +1119,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed', 'feedback_shown', 'answer_restored', 'feedback_edited')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed', 'feedback_shown', 'answer_restored', 'feedback_edited', 'clock_gap')`,
     ),
   }),
 );
