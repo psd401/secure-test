@@ -56,6 +56,25 @@ function href(sort: UsageSort, usageWindow: UsageWindow, q: string): string {
   return `/admin/usage?${qs}`;
 }
 
+/**
+ * A row with no email anywhere in the data: in production these are owners
+ * of assessments made before the OE-1 fix of 2026-10-23, when New assessment
+ * did not save the owner's email. There is no staff
+ * directory to look one up in; `healAssessmentOwnerEmail` fills it in when
+ * the owner next opens one. Says so instead of showing the raw Google `sub`,
+ * which stays in the cell's title for an admin who needs it.
+ */
+function NoEmail() {
+  return (
+    <span className="block whitespace-normal">
+      <span className="font-medium text-muted-foreground">No email on record</span>
+      <span className="block text-xs text-muted-foreground">
+        Tests made before Oct 23, 2026 didn&rsquo;t save it. It fills in when they next open one.
+      </span>
+    </span>
+  );
+}
+
 /** The admin all-assessments list, filtered to this teacher. */
 function assessmentsHref(email: string): string {
   return `/dashboard?${new URLSearchParams({ all: "1", owner: email.toLowerCase() })}`;
@@ -171,7 +190,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
                         {r.email}
                       </Link>
                     ) : (
-                      r.sub
+                      <NoEmail />
                     )}
                   </TableCell>
                   {COLUMNS.map((c) => (
