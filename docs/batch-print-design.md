@@ -3,7 +3,8 @@
 Design note, 2026-10-15. Roadmap row U-9 (`docs/roadmap-2026-09.md`, James
 2026-09-23, "not mission critical"). Builds on Print student work
 (`docs/student-work-export-design.md`, D-1 anonymous labels + key page,
-D-2 every item type). Nothing is built.
+D-2 every item type). **Shipped:** slices 1–3 merged 2026-10-18 and live
+since (see Progress).
 
 ## Decisions (James, 2026-10-15)
 
@@ -142,6 +143,15 @@ Design tool only; no migration; no client release.
   students than `_demo` has); help topic 9's packet step and the quick
   start name several sections, chosen students and work not yet handed in.
   Open: re-capture the topic's picture (later, per James).
+
+- **Merged and live (record corrected 2026-11-26).** The three slices above
+  were committed to `main` on 2026-10-18 (`7ed7ef39` slice 1, `40b91518`
+  slice 2, `f492cd14` slice 3) and are in production at least since the
+  v2.0 deploy (server `27824b88`, 2026-10-24). Hand-run rows 615–626 ran on
+  local `_demo` 2026-10-18 (`d2ae275c`); row 623 (over 200 students) was
+  likely not exercisable there. Still open: the help topic's picture. The
+  "not committed" lines above were never updated, so the public roadmap
+  kept listing this under Ahead until 2026-11-26.
 
 ## Open questions — answered 2026-10-15 (see Decisions)
 
