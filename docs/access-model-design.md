@@ -258,6 +258,30 @@ check and adds the test that keeps it that way.
   with slices 5 and 6: substitutes, admins and principals are revisited
   together when the account model is next on the table; the refinements
   above are the design when it is.
+  **Deferred again 2026-11-26 (James), until there is more feedback:**
+  admins opening sessions may be the better solution at first, and giving
+  substitutes this much access is an unnecessary risk. Meanwhile an admin covers a class with Act as
+  (`/admin`, `POST /api/admin/impersonate`): the sitting is the teacher's,
+  `impersonation_sessions` records the admin, and the banner shows
+  throughout. **Review of the design against the code that day, for when it
+  is revisited:** the server side is mostly built — `teacher`-scope grants
+  resolve through `assessments.owner_email`, the home list includes them,
+  sitting creation keeps the sitting the teacher's with `created_by_sub` =
+  the sub, and the Monitor's actions (hand in, extend / add minutes, Let
+  back in, view screen, Continue) need only `run`; only the admin API can
+  make such a grant, and there is no UI. Gaps: (1) **a `run` grant opens
+  Results** — Results, the per-student page, print, the work packet and
+  the assessment page ask only for `view`, which `run` includes, so the
+  "Monitor only" refinement is not enforced; the competency proctor path
+  (`lib/api/access.ts`, `run` on sittings / attempts, never on the
+  assessment) is the model to follow; (2) drafts are not filtered out for a
+  sub; (3) no Coverage card, server-side 31-day cap, "Covering for" label or
+  revoke; (4) pass back needs `edit`, so a sub cannot reopen a handed-in
+  test; assessments made before the OE-1 fix (2026-10-23) have no
+  `owner_email`, so a teacher-scope grant does not reach them until the
+  owner next opens them; (5) open: whether district substitutes sign in
+  with `psd401.net` accounts. Until (1) is fixed, do not make a
+  `teacher`-scope `run` grant through `/api/grants`.
 - **D-6** Admin reads everything; admin writes outside the admin surface
   go through impersonation. — **DECIDED as recommended (James, 2026-09-17)**
   **Enforced in `lib/api/access.ts` 2026-10-25** (security audit 2026-10-24,
