@@ -167,6 +167,26 @@ describe("buildImportPreview (pure)", () => {
     expect(text("sources_dropped")).toStartWith("2 passages show");
   });
 
+  test("B1: a weight outside 0-100 / 2 decimals is dropped and the preview says so", () => {
+    const b = bundle();
+    b.items[0]!.points = 150; // out of range
+    b.items[1]!.points = 2.5; // fine
+    b.items[2]!.points = 1.234; // three decimals
+    const plan = planImport(b, new Map());
+    expect(plan.pointsDropped).toBe(2);
+    expect(plan.rows.slice(0, 3).map((r) => r.points)).toEqual([null, 2.5, null]);
+    const warning = buildImportPreview(b, plan, { name: b.title, sourcesDropped: 0 }).warnings.find(
+      (w) => w.code === "points_dropped",
+    );
+    expect(warning?.message).toBe(
+      "2 questions' points aren't between 0 and 100 with at most two decimals. They will be worth the usual points for the type; set them again in the editor.",
+    );
+    // Valid or absent weights: no warning.
+    const clean = bundle();
+    clean.items[1]!.points = 2.5;
+    expect(pure(clean).warnings.map((w) => w.code)).not.toContain("points_dropped");
+  });
+
   test("a clean bundle has no warnings; an empty one says so", () => {
     const clean = bundle({
       allowed_accommodations: [],

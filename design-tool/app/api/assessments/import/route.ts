@@ -65,6 +65,8 @@ export async function POST(req: Request) {
       // doesn't handle are skipped per-item, never imported as short_text.
       items_skipped_unknown_type: result.items_skipped_unknown_type,
       scoring_methods_dropped: result.scoring_methods_dropped,
+      // B1: weights outside D5, imported at the question's usual points.
+      points_dropped: result.points_dropped,
     },
     { status: 201 },
   );
