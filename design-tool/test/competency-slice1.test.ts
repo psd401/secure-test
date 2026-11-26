@@ -9,7 +9,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bu
 import { eq, sql } from "drizzle-orm";
 import type { Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
-import { assessments } from "../db/schema";
+import { assessments, items } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
@@ -179,6 +179,30 @@ describe("PUT /api/assessments/:id/competency", () => {
     const row = await reload(a.id);
     expect(row.assigned_scope).toBe("district");
     expect(row.competency_pass_min_points).toBe(3);
+  });
+
+  test("B1 D6: refused while a question has points; allowed once they are cleared", async () => {
+    process.env.COMPETENCY_ADMIN_EMAILS = ASSESSMENT_STAFF;
+    const a = await newAssessment("staff-sub", ASSESSMENT_STAFF);
+    const [weighted] = await getDb()
+      .insert(items)
+      .values([
+        { assessment_id: a.id, position: 0, type: "essay", stem: "One" },
+        { assessment_id: a.id, position: 1, type: "essay", stem: "Two", points: 4 },
+      ])
+      .returning()
+      .then((rows) => rows.filter((r) => r.points !== null));
+    principal = { sub: "staff-sub", role: "staff", email: ASSESSMENT_STAFF };
+    const refused = await put(a.id, { pass_min_points_per_criterion: 3 });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ ok: false, error: "items_have_points", questions: [2] });
+    const unchanged = await reload(a.id);
+    expect(unchanged.assigned_scope).toBe("teacher");
+    expect(unchanged.competency_pass_min_points).toBeNull();
+
+    await getDb().update(items).set({ points: null }).where(eq(items.id, weighted!.id));
+    expect((await put(a.id, { pass_min_points_per_criterion: 3 })).status).toBe(200);
+    expect((await reload(a.id)).assigned_scope).toBe("district");
   });
 
   test("an owner who is not on the list is refused", async () => {

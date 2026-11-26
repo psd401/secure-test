@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { assessments } from "@/db/schema";
+import { assessments, items } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, notFoundResponse } from "@/lib/api/access";
@@ -30,6 +30,12 @@ const CompetencyBody = z
  * and only on an assessment they own — a listed person cannot claim someone
  * else's test, and an owner who is not listed cannot mark their own. A
  * session not on the list gets a 404, as the admin-only grants API does.
+ *
+ * B1 (docs/point-weighting-design.md, D6): refused with 409
+ * `items_have_points` while any question carries a point weight — the pass
+ * rule reads rubric criterion points, and the item routes refuse a weight on
+ * a competency assessment, so the two must not meet. The check is inside the
+ * UPDATE (NOT EXISTS), so it holds at the moment of the write.
  */
 export async function PUT(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
@@ -62,7 +68,30 @@ export async function PUT(req: Request, ctx: RouteContext) {
       competency_pass_min_points: parsed.data.pass_min_points_per_criterion,
       updated_at: new Date(),
     })
-    .where(eq(assessments.id, id))
+    .where(
+      and(
+        eq(assessments.id, id),
+        sql`NOT EXISTS (SELECT 1 FROM ${items} WHERE ${items.assessment_id} = ${id} AND ${items.points} IS NOT NULL)`,
+      ),
+    )
     .returning();
+  if (!updated) {
+    // The access check found the assessment, so the only way to update
+    // nothing is a question with points.
+    const weighted = await db
+      .select({ position: items.position })
+      .from(items)
+      .where(and(eq(items.assessment_id, id), isNotNull(items.points)))
+      .orderBy(items.position);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "items_have_points",
+        questions: weighted.map((w) => w.position + 1),
+        hint: "Clear Points on these questions first: a competency assessment scores on rubric points.",
+      },
+      { status: 409 },
+    );
+  }
   return NextResponse.json({ assessment: updated });
 }
