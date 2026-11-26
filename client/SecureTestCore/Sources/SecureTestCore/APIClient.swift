@@ -92,6 +92,18 @@ extension APIError {
         return false
     }
 
+    /// Working-time clock slice 4 (`docs/working-time-clock-design.md`, D2):
+    /// the delivery route answers 409 `rejoin_needs_approval` when a student
+    /// comes back into the same sitting on a working-time test and the teacher
+    /// has not pressed "Let back in" yet. Sent only to clients that send
+    /// `X-SecureTest-Version`; refused before begin(), so no secure session.
+    public static let rejoinNeedsApprovalCode = "rejoin_needs_approval"
+
+    public var isRejoinNeedsApproval: Bool {
+        if case .refused(_, let code) = self { return code == Self.rejoinNeedsApprovalCode }
+        return false
+    }
+
     /// RD-1 (2026-10-08): the server's error string for "this attempt is
     /// already handed in" — refused 409 on every write after a submit. The
     /// spool still drops such writes; the host tells them apart so the

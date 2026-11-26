@@ -37,6 +37,15 @@ public enum JoinErrorCopy {
     /// server is not configured to serve one, so a retry cannot help.
     public static let rendererMissingInformative = "Ask your teacher."
 
+    /// Working-time clock slice 4 (D2): the notice while the app waits for
+    /// the teacher's "Let back in" (`RejoinWait`), and the one after it stops
+    /// asking. No secure session has begun in either.
+    public static let rejoinWaitingMessage = "Your teacher needs to let you back in."
+    public static let rejoinWaitingInformative = "Ask them, then this will open on its own."
+    public static let rejoinGaveUpMessage = "Your teacher hasn't let you back in yet."
+    public static let rejoinGaveUpInformative =
+        "Ask your teacher to let you back in, then open the test again from Your tests."
+
     /// Field report 2026-10-08: the line over the sign-in button after the
     /// server refused an expired session (see `APIError.isSessionExpired`).
     public static let sessionExpiredMessage = "Your sign-in has expired. Sign in again."
@@ -104,6 +113,10 @@ public enum JoinErrorCopy {
             // EX-2: the status line has room for one sentence pair; the same
             // words as the sheet.
             return "\(timeRanOutMessage) \(timeRanOutInformative)"
+        case "rejoin_needs_approval":
+            // Slice 4: a status-line fallback; the attempt screen waits and
+            // retries instead (`RejoinWait`).
+            return "\(rejoinGaveUpMessage) \(rejoinGaveUpInformative)"
         case "client_update_required":
             // FB slice 6 (docs/fill-in-blank-design.md, D-4): the delivery
             // route refuses a test with an item type this build cannot render,
