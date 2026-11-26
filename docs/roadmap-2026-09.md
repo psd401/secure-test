@@ -78,7 +78,7 @@ a question for the feedback round, not a backlog item.
   keys only; digits, letters and `+ − = /` come from the keyboard. Ask
   students whether they reached for on-screen digits (touch / motor needs)
   and teachers whether any student needed them.
-- **E11 rescoring after a key change** — teacher input arrived 2026-10-08 (open beta: a wrong MC key fixed after hand-in); SCOPED as a per-item "Rescore with the current key" button, D-1…D-3 decided, nothing built — `docs/rescore-after-key-change-design.md`.
+- **E11 rescoring after a key change** — teacher input arrived 2026-10-08 (open beta: a wrong MC key fixed after hand-in); SCOPED as a per-item "Rescore with the current key" button, D-1…D-3 decided; **BUILT 2026-10-08, DEPLOYED 2026-10-09** (`0112ed4`, `docs/rescore-after-key-change-design.md` §Progress; updated 2026-11-25) — `docs/rescore-after-key-change-design.md`.
 - **Handing in an essay over its word limit** (James, 2026-10-24, the
   v2.0.0 RC sitting): a student can hand in with "52 / 50 words". Today
   that is the design — the counter shows red and nothing is cut (the
@@ -516,6 +516,18 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 `client/MANUAL-CHECKS.md` "Client hygiene (2026-09-15) — v1.3.3 candidate"
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
+
+### 2026-11-25 — past the open beta: district-wide, soft release
+
+James, 2026-11-25: "We are either deep in beta or early in a soft release at
+this point." The open beta (one school, from 2026-10-01) and the
+district-wide rollout are both DONE (James, answering the public roadmap's
+first two Ahead items: "1 and 2 are done"). The rollout's exact date is not
+recorded here. Deploys staying on James's laptop (`deploy.sh`) is fine for
+now, so "staging environment and automated deploys" came off the public
+roadmap's Ahead list (staging already exists, see "Environments" below).
+The Ahead order now starts with the working-time clock (row U-8 (a)).
+Record: PR #248.
 
 ### 2026-10-05 — EX-2 in the field: "Time is up." on every Resume (design-tool + client)
 

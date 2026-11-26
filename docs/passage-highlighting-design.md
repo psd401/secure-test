@@ -1,6 +1,6 @@
 # Passage highlighting (roadmap U-21) — design note
 
-Status: **draft 2026-10-14, nothing built.** Decisions already made by James
+Status: **BUILT 2026-10-14 (slices 1–4, see Progress); live with v2.0 (2026-10-24), the release this was held for.** Status line updated 2026-11-25; it read "draft, nothing built" until then. Decisions already made by James
 (2026-10-13, roadmap row U-21): **5.2** this sitting only — no storage, no
 bridge message; **5.3** a per-assessment checkbox "Let students highlight
 passages"; **5.4** one colour plus "remove highlight"; **5.5** not shown to

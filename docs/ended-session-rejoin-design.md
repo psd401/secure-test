@@ -1,6 +1,6 @@
 # Ended session: let students back in (roadmap row ES)
 
-Status: DECIDED 2026-10-19 (James: D-1 (a), D-2 every ended class sitting, hotfix mode in `deploy.sh`) — nothing built. Side: design tool only (no
+Status: DECIDED 2026-10-19 (James: D-1 (a), D-2 every ended class sitting, hotfix mode in `deploy.sh`) — **BUILT and LIVE 2026-10-19** as the first hotfix (see Progress; status line updated 2026-11-25). Side: design tool only (no
 client change, no migration).
 
 ## Trigger (beta report, 2026-10-19)

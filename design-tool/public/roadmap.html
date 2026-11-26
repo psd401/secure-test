@@ -245,7 +245,7 @@
 
 <section class="hero">
   <div class="eyebrow">Peninsula School District</div>
-  <h1>From a one-day experiment to an open beta</h1>
+  <h1>From a one-day experiment to every school in the district</h1>
   <p class="lede">SecureTest locks a student's Mac for the length of a test, and gives teachers a web tool to build, run, monitor and score those tests. It is built in the open by the district's Research &amp; Assessment office.</p>
   <div class="stats" id="stats"></div>
 </section>
@@ -264,8 +264,8 @@
       </div>
       <aside>
         <div class="panel">
-          <h2>Questions for the beta</h2>
-          <p>Deliberately not built until beta teachers and students tell us they are wanted.</p>
+          <h2>Open questions</h2>
+          <p>Deliberately not built until teachers and students tell us they are wanted.</p>
           <ul id="pilot-questions"></ul>
         </div>
         <div class="panel">
@@ -408,11 +408,8 @@ const JOURNEY = [
 
 // Planned order. wait = what it depends on outside the team.
 const AHEAD = [
-  { title: "Run the open beta and gather feedback", text: "Users across one school. Teacher and student feedback rounds; the questions at right are part of it." },
-  { title: "District-wide rollout", text: "Every school, on district-managed Macs." },
-  { title: "Send scores to Schoology", text: "The same Send to gradebook, for classes graded in Schoology.", wait: "Schoology app setup" },
-  { title: "Staging environment and automated deploys", text: "A practice copy of the system, and deploys that no longer run from one laptop." },
   { title: "A working-time clock", text: "Time limits count time actually spent in a test across several sessions." },
+  { title: "Send scores to Schoology", text: "The same Send to gradebook, for classes graded in Schoology.", wait: "Schoology app setup" },
   { title: "Print chosen students or sections together", text: "One packet for any mix of students and classes." },
   { title: "Substitute and principal access", text: "A substitute can run the session; a principal can see their building." },
   { title: "Students not yet enrolled", text: "A way to test a student who has not reached the roster yet." },
@@ -421,7 +418,6 @@ const AHEAD = [
 
 const PILOT_QUESTIONS = [
   "Do students want on-screen number keys on the math keypad?",
-  "Should changing an answer key rescore work already handed in?",
   "What shape should a gradebook export file take?",
   "Would finer reading-speed controls, or a choice of voice, help students using read-aloud?",
   "Should a speed change apply straight away, without stopping and starting the reading again?",
