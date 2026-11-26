@@ -1,6 +1,6 @@
 # Rescore with the current key (roadmap E11)
 
-Status: scoped 2026-10-08, nothing built.
+Status: scoped 2026-10-08; **BUILT 2026-10-08, DEPLOYED 2026-10-09** with `0112ed4` (see Progress; status line updated 2026-11-25).
 
 ## Trigger
 
