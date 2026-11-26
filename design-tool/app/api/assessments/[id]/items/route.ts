@@ -5,6 +5,7 @@ import { assessments, items } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraft } from "@/lib/api/requireDraft";
 import { itemConfigForWrite, parseItemBody, pointsNotAllowedResponse, wantsEmptyStem } from "@/lib/api/items";
+import { lockAssessmentForPoints } from "@/lib/api/competencyLock";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
@@ -62,7 +63,9 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!access.ok) return access.response;
   const draftGuard = requireDraft(access.assessment);
   if (draftGuard) return draftGuard;
-  // B1 D6: no point weights on a competency assessment.
+  // B1 D6: no point weights on a competency assessment. The early read is a
+  // fast refusal; the decision is re-made under the assessment's row lock
+  // inside the write's transaction (lib/api/competencyLock.ts).
   if (body.points != null && access.assessment.competency_pass_min_points != null) {
     return pointsNotAllowedResponse();
   }
@@ -76,6 +79,7 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   const db = getDb();
   const inserted = await db.transaction(async (tx) => {
+    if (body.points != null && (await lockAssessmentForPoints(tx, id)) === true) return "competency" as const;
     const [last] = await tx
       .select({ position: items.position })
       .from(items)
@@ -105,5 +109,6 @@ export async function POST(req: Request, ctx: RouteContext) {
     return row;
   });
 
+  if (inserted === "competency") return pointsNotAllowedResponse();
   return NextResponse.json({ item: inserted }, { status: 201 });
 }
