@@ -7,7 +7,10 @@
  * the email is only the label. Student data appears as counts, never rows.
  *
  * Volume columns (slice 1):
- * - assessments created (`assessments.owner_sub`)
+ * - assessments created (`assessments.owner_sub`), live ones only: the
+ *   teacher's email links to their live list on the dashboard, so an archived
+ *   test counted here made the number disagree with the list it opens. An
+ *   archived assessment still supplies the email and last active.
  * - class sittings run (`test_sessions.owner_sub`, practice sittings excluded:
  *   they are a teacher trying the client, not a class being tested)
  * - students tested (distinct students with a SUBMITTED attempt in one of the
@@ -137,7 +140,7 @@ export async function teacherUsage(
     .select({
       sub: assessments.owner_sub,
       email: max(assessments.owner_email),
-      n: count(),
+      n: sql<number>`(count(*) filter (where ${assessments.archived_at} is null))::int`,
       last: max(assessments.created_at),
     })
     .from(assessments)

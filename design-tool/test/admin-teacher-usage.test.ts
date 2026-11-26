@@ -251,6 +251,32 @@ describe("teacherUsage", () => {
     expect(recent[A]!.featuresUsed).toBe(4);
   });
 
+  test("assessments created counts live ones, matching the list the email opens", async () => {
+    await seed();
+    const db = getDb();
+    await db
+      .update(assessments)
+      .set({ archived_at: RECENT })
+      .where(eq(assessments.name, "A2"));
+    await db.insert(assessments).values({
+      owner_sub: "usage-teacher-c",
+      owner_email: "usage-teacher-c@example.org",
+      name: "C1",
+      created_at: RECENT,
+      archived_at: RECENT,
+    });
+    const rows = bySub(await teacherUsage(db, { since: null }));
+    expect(rows[A]!.assessments).toBe(1);
+    // The archived test's sitting still counts as activity.
+    expect(rows[A]).toMatchObject({ sittings: 2, attempts: 3 });
+    // Only an archived assessment: the row stays, with its email and date, at 0.
+    expect(rows["usage-teacher-c"]).toMatchObject({
+      assessments: 0,
+      email: "usage-teacher-c@example.org",
+    });
+    expect(rows["usage-teacher-c"]!.lastActive).toEqual(RECENT);
+  });
+
   test("no activity returns no rows", async () => {
     expect(await teacherUsage(getDb(), { since: null })).toEqual([]);
   });
