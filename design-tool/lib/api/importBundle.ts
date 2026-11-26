@@ -82,6 +82,8 @@ export interface ImportBundleResult {
   // silent, so a teacher believed AI scoring was configured when the item
   // had landed on its default.
   scoring_methods_dropped: number;
+  /** B1: questions whose `points` was outside D5 and imported at the natural maximum. */
+  points_dropped: number;
 }
 
 export interface ImportBundleError {
@@ -307,6 +309,7 @@ export async function importBundleForOwner(
     construct_altering_dropped: plan.caDropped,
     items_skipped_unknown_type: plan.skippedUnknownType,
     scoring_methods_dropped: plan.scoringMethodsDropped,
+    points_dropped: plan.pointsDropped,
   };
 }
 
@@ -395,6 +398,11 @@ export function planImport(bundle: ItemBundle, remap: Map<string, string>) {
   }
 
   const rows = withNoCalculator(importable, importable.map((it, idx) => importItemValues(it, idx, remap, clampAndCount)));
+  // B1: a weight outside D5 imports as null (natural max) in importItemValues;
+  // count those so the preview can say so rather than lose it silently.
+  const pointsDropped = importable.filter(
+    (it) => it.points !== undefined && !PointsField.safeParse(it.points).success,
+  ).length;
   return {
     error: graphError,
     allowedValid,
@@ -406,6 +414,7 @@ export function planImport(bundle: ItemBundle, remap: Map<string, string>) {
     rows,
     // Read after `rows`: the clamp counts as the rows are built.
     scoringMethodsDropped,
+    pointsDropped,
   };
 }
 

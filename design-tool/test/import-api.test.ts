@@ -1207,3 +1207,26 @@ describe("import: graph items (D-9)", () => {
     expect(await count()).toBe(0);
   });
 });
+
+// B1: a weight outside D5 (> 0, <= 100, <= 2 decimals) imports at the
+// natural maximum, and the import report counts it.
+describe("points_dropped reporting (B1)", () => {
+  test("an out-of-range weight is dropped and counted; a valid one is kept", async () => {
+    asUser("import-points-teacher");
+    const res = await postImport({
+      test_id: "points-bundle",
+      title: "Points report",
+      items: [
+        { type: "short_text", id: "s1", stem: "Too big", correct_answer: "a", points: 250 },
+        { type: "short_text", id: "s2", stem: "Fine", correct_answer: "b", points: 2.5 },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { assessment: { id: string }; points_dropped: number };
+    expect(body.points_dropped).toBe(1);
+    const rows = (await getDb().execute(
+      sql`select points from items where assessment_id = ${body.assessment.id} order by position`,
+    )) as unknown as { points: number | null }[];
+    expect(rows.map((r) => r.points)).toEqual([null, 2.5]);
+  });
+});

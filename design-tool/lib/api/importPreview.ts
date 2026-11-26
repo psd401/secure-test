@@ -24,6 +24,7 @@ export interface ImportPreviewWarning {
     | "no_items"
     | "unknown_types"
     | "scoring_dropped"
+    | "points_dropped"
     | "accommodations_dropped"
     | "sources_dropped"
     | "missing_pictures"
@@ -135,6 +136,12 @@ export function buildImportPreview(
     warnings.push({
       code: "scoring_dropped",
       message: `${plural(plan.scoringMethodsDropped, "question's scoring setting doesn't", "questions' scoring settings don't")} fit the question or need a rubric the file doesn't have. ${plan.scoringMethodsDropped === 1 ? "It" : "They"} will use the usual scoring for the type.`,
+    });
+  }
+  if (plan.pointsDropped > 0) {
+    warnings.push({
+      code: "points_dropped",
+      message: `${plural(plan.pointsDropped, "question's points aren't", "questions' points aren't")} between 0 and 100 with at most two decimals. ${plan.pointsDropped === 1 ? "It" : "They"} will be worth the usual points for the type; set ${plan.pointsDropped === 1 ? "it" : "them"} again in the editor.`,
     });
   }
   if (accommodationsDropped > 0) {
