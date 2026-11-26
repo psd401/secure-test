@@ -303,12 +303,12 @@
 // ---------------------------------------------------------------------------
 // Content. Update these lists as work lands; the page is built from them.
 // ---------------------------------------------------------------------------
-const UPDATED = "2026-11-25";
+const UPDATED = "2026-11-26";
 
 const STATS = [
-  { value: "190", label: "days from first experiment" },
+  { value: "191", label: "days from first experiment" },
   { value: "18", label: "student app releases" },
-  { value: "74", label: "database migrations" },
+  { value: "76", label: "database migrations" },
   { value: "4,000+", label: "automated tests" },
 ];
 
@@ -404,11 +404,12 @@ const JOURNEY = [
     text: "From open-beta feedback: teachers write their own feedback on each answer and on the whole test, then choose any mix of teacher score, AI score, teacher feedback and AI feedback for a student's Google Doc or printed packet. Every score and comment says whether it came from the teacher or the AI, an AI score the teacher changed never reaches the student, and short answers join essays in the Doc." },
   { date: "2026-11-25", title: "Questions worth more than a point",
     text: "A teacher sets what each question is worth. A table or fill-in-the-blank shares its points among its parts, a rubric keeps its levels and scales its total, and the outline shows the test's total. Changing points after students hand in is one Rescore, which keeps the share of any score the teacher set." },
+  { date: "2026-11-26", title: "A time limit that counts time in the test",
+    text: "A timed test can count only the time a student actually spends in it, across as many sessions as it takes, so a test started one day and finished the next keeps its minutes. Teachers add minutes for one student, see minutes used and left on the Monitor, and let a student back in after they leave the test." },
 ];
 
 // Planned order. wait = what it depends on outside the team.
 const AHEAD = [
-  { title: "A working-time clock", text: "Time limits count time actually spent in a test across several sessions." },
   { title: "Send scores to Schoology", text: "The same Send to gradebook, for classes graded in Schoology.", wait: "Schoology app setup" },
   { title: "Print chosen students or sections together", text: "One packet for any mix of students and classes." },
   { title: "Substitute and principal access", text: "A substitute can run the session; a principal can see their building." },
