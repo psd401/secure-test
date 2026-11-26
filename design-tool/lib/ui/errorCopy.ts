@@ -310,6 +310,10 @@ export function attemptHandInErrorCopy(code: string): ErrorCopy {
       return { message: "Close the test session first.", showCode: false };
     case "already_submitted":
       return { message: "Already handed in.", showCode: false };
+    // Working-time clock (D3/D4): the page offered "+N minutes" but the
+    // test's clock is no longer working time (changed in Settings since).
+    case "add_minutes_needs_working_time":
+      return { message: "This test's clock changed. Reload the page and try again.", showCode: false };
     case "forbidden":
       return {
         message: "Only the assessment's owner can hand in an attempt.",
@@ -371,6 +375,10 @@ export function passBackErrorCopy(code: string): ErrorCopy {
   switch (code) {
     case "not_submitted":
       return { message: "Not handed in yet.", showCode: false };
+    // Working-time clock (D3/D4): the page offered "+N minutes" but the
+    // test's clock is no longer working time (changed in Settings since).
+    case "add_minutes_needs_working_time":
+      return { message: "This test's clock changed. Reload the page and try again.", showCode: false };
     case "ends_at_required":
     case "ends_at_past":
       return { message: "Pick a time in the future.", showCode: false };

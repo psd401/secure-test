@@ -8,9 +8,11 @@ import {
   extendAttempt,
   extendBodyFields,
   hasExactlyOneTarget,
+  targetFitsClock,
   toExtendTarget,
   type ExtendTarget,
 } from "@/lib/api/extendAttempt";
+import { loadTimeLimit } from "@/lib/api/attemptDeadline";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeSitting } from "@/lib/api/access";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
@@ -90,7 +92,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!bodyRead.ok) return bodyRead.response;
   try {
     const body = Body.parse(bodyRead.parse());
-    if (!hasExactlyOneTarget(body)) throw new Error("ends_at xor no_limit");
+    if (!hasExactlyOneTarget(body)) throw new Error("one of ends_at, no_limit, add_minutes");
     target = toExtendTarget(body);
     attemptIds = body.attempt_ids;
   } catch {
@@ -100,6 +102,14 @@ export async function POST(req: Request, ctx: RouteContext) {
   const now = new Date();
   if ("endsAt" in target && target.endsAt.getTime() <= now.getTime()) {
     return NextResponse.json({ ok: false, error: "ends_at_past" }, { status: 400 });
+  }
+
+  // Working-time clock (D3): "+N minutes" only on a working-time test.
+  if (!targetFitsClock(target, await loadTimeLimit(db, sitting))) {
+    return NextResponse.json(
+      { ok: false, error: "add_minutes_needs_working_time" },
+      { status: 400 },
+    );
   }
 
   const onSitting = await db

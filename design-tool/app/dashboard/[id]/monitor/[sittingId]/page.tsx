@@ -48,6 +48,7 @@ export default async function MonitorPage({ params, searchParams }: PageProps) {
       studentPsIds={row.sitting.student_ps_ids}
       openCodeOnLoad={codeParam === "1"}
       assessmentUntimed={(row.assessment.time_limit_seconds ?? 0) <= 0}
+      workingTime={(row.assessment.time_limit_seconds ?? 0) > 0 && row.assessment.time_limit_mode === "working"}
       // SEC-04: a class row needs `own`; a practice sitting's one row is
       // deletable by the staff member who practised (the route's rule).
       {...(access.via === "proctor"

@@ -19,7 +19,7 @@ import type {
 } from "@secure-test/schema";
 import { DEFAULT_GRAPH_BOARD } from "./GraphItemEditor";
 import type { SectionAccommodations } from "@/lib/accommodations/sections";
-import type { ItemType } from "@/db/schema";
+import type { ItemType, TimeLimitMode } from "@/db/schema";
 import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
 import type { MaxPointsInput } from "@/lib/scoring/maxPoints";
 import type { OspiTier } from "@/lib/accommodations/catalog";
@@ -142,6 +142,8 @@ export interface AssessmentView {
   status: string;
   allow_llm_authoring: boolean;
   time_limit_seconds: number | null;
+  /** Working-time clock (D1): what the limit counts. */
+  time_limit_mode: TimeLimitMode;
   /** Client paging (docs/client-paging-design.md): scroll | paged. */
   student_layout: "scroll" | "paged";
   /** Instant feedback (docs/instant-feedback-design.md): off | score | right_wrong | answers. */

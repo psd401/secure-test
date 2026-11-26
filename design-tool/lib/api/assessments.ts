@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CalculatorModeSchema, CalculatorPresetSchema, StudentLayoutSchema } from "@secure-test/schema";
-import { ANSWERS_RELEASE_MODES, ITEM_TYPES, STUDENT_FEEDBACK_LEVELS } from "@/db/schema";
+import { ANSWERS_RELEASE_MODES, ITEM_TYPES, STUDENT_FEEDBACK_LEVELS, TIME_LIMIT_MODES } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
 import { SectionAccommodationsSchema } from "@/lib/accommodations/sections";
 import { MAX_ASSESSMENT_LIST, MAX_ITEM_LIST } from "@secure-test/schema";
@@ -53,6 +53,9 @@ export const UpdateAssessmentBody = z
     name: z.string().min(1).max(200).optional(),
     description: z.string().max(2000).optional(),
     time_limit_seconds: z.number().int().positive().nullable().optional(),
+    // Working-time clock (docs/working-time-clock-design.md, D1): what the
+    // limit counts. Read only when the limit is set; saved with it.
+    time_limit_mode: z.enum(TIME_LIMIT_MODES).optional(),
     allow_llm_authoring: z.boolean().optional(),
     allow_clipboard: z.boolean().optional(),
     student_layout: StudentLayoutSchema.optional(),

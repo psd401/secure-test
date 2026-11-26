@@ -43,7 +43,7 @@ import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsContro
 import { canSendToGoogleDocs, hasDocTextItems } from "@/lib/googleDocs/sendDialog";
 import { loadFeedbackReleasePrefs } from "@/lib/reporting/feedbackReleasePrefs";
 import { docUrl } from "@/lib/googleDocs/drive";
-import { attemptIsTimed } from "@/lib/api/attemptDeadline";
+import { reopenNeedsEndTime } from "@/lib/api/attemptDeadline";
 import { practiceAttemptIsCallers } from "@/lib/api/staffAttempt";
 import { deadlineNote } from "../../attendanceView";
 import { ExtendTimeAndReload } from "../ExtendTimeAndReload";
@@ -576,7 +576,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
   // Pass back (docs/pass-back-design.md): the same "does a deadline exist at
   // all" test the route applies, asked here so the dialog knows up front
   // whether to ask for a new one.
-  const timed = attemptIsTimed(attempt, assessment);
+  const timed = reopenNeedsEndTime(attempt, assessment);
 
   return (
     <main className="mx-auto max-w-3xl space-y-8 px-6 py-10">
@@ -614,7 +614,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                   {attempt.pass_back_count === 1 ? "" : "s"}
                 </>
               ) : null}
-              {deadlineNote(row.deadline_at, row.deadline_passed, undefined, attempt.time_limit_removed) ? (
+              {deadlineNote(row.deadline_at, row.deadline_passed, undefined, attempt.time_limit_removed, row.working_time) ? (
                 <span
                   className={
                     row.deadline_passed && !attempt.time_limit_removed
@@ -622,7 +622,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                       : "ml-2 text-xs text-muted-foreground"
                   }
                 >
-                  {deadlineNote(row.deadline_at, row.deadline_passed, undefined, attempt.time_limit_removed)}
+                  {deadlineNote(row.deadline_at, row.deadline_passed, undefined, attempt.time_limit_removed, row.working_time)}
                 </span>
               ) : null}
             </p>
@@ -698,6 +698,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 attemptId={attemptId}
                 deadlineAt={row.deadline_at}
                 assessmentUntimed={(assessment.time_limit_seconds ?? 0) <= 0}
+                workingTime={(assessment.time_limit_seconds ?? 0) > 0 && assessment.time_limit_mode === "working"}
               />
             ) : null}
             {/* Pass back is `edit` (D-1, D-15), as the route requires and as
@@ -712,6 +713,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 }
                 scoreCount={finalScoreCount}
                 timed={timed}
+                workingTime={(assessment.time_limit_seconds ?? 0) > 0 && assessment.time_limit_mode === "working"}
               />
             ) : null}
             {/* SEC-04: Delete attempt is `own` (D-R5), or the practiser's own

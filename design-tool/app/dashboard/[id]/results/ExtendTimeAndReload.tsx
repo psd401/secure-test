@@ -12,16 +12,20 @@ export function ExtendTimeAndReload({
   attemptId,
   deadlineAt,
   assessmentUntimed = false,
+  workingTime = false,
 }: {
   attemptId: string;
   deadlineAt?: string | Date | null;
   assessmentUntimed?: boolean;
+  /** Working-time clock (D3): "+N minutes" instead of a new deadline. */
+  workingTime?: boolean;
 }) {
   return (
     <ExtendTimeControl
       target={{ kind: "attempt", attemptId }}
       currentDeadlines={[deadlineAt]}
       assessmentUntimed={assessmentUntimed}
+      workingTime={workingTime}
       onExtended={() => {
         window.location.reload();
       }}

@@ -18,6 +18,11 @@ import {
   type CorrectionsChoice,
 } from "@/components/app/CorrectionsOptions";
 import { ApiError, passBackErrorCopy } from "@/lib/ui/errorCopy";
+import {
+  PASS_BACK_ADD_MINUTES_ERROR,
+  PassBackAddMinutes,
+  passBackAddMinutesBody,
+} from "@/components/app/PassBackAddMinutes";
 import { NO_SECTION } from "@/lib/scoring/sectionFilter";
 import { passBackAllCopy } from "@/components/app/PassBackAllControl";
 import {
@@ -64,10 +69,13 @@ export function sectionOptionLabel(o: PassBackSectionOption): string {
  */
 export function PassBackSectionControl({
   assessmentId,
+  workingTime = false,
   onPassedBack,
   size = "sm",
 }: {
   assessmentId: string;
+  /** Working-time clock (D4): offer the optional "+N minutes". */
+  workingTime?: boolean;
   onPassedBack: () => void;
   size?: "xs" | "sm" | "default";
 }) {
@@ -75,6 +83,7 @@ export function PassBackSectionControl({
   const [options, setOptions] = useState<PassBackSectionOption[] | null>(null);
   const [section, setSection] = useState("");
   const [value, setValue] = useState("");
+  const [addMinutes, setAddMinutes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -106,6 +115,11 @@ export function PassBackSectionControl({
         return;
       }
     }
+    const added = workingTime ? passBackAddMinutesBody(addMinutes) : {};
+    if (added === null) {
+      setError(PASS_BACK_ADD_MINUTES_ERROR);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -115,6 +129,7 @@ export function PassBackSectionControl({
         body: JSON.stringify({
           section: chosen.section,
           ...(endsAt ? { ends_at: endsAt } : {}),
+          ...added,
           ...correctionsBody(corrections),
         }),
       });
@@ -138,6 +153,7 @@ export function PassBackSectionControl({
           setError(null);
           setStatus(null);
           setValue(defaultExtendValue());
+          setAddMinutes("");
           setCorrections(NO_CORRECTIONS);
           setOpen(true);
           void loadOptions();
@@ -207,6 +223,9 @@ export function PassBackSectionControl({
               This test has a time limit — pick when it ends now, for everyone.
             </span>
           </label>
+        ) : null}
+        {workingTime && chosen ? (
+          <PassBackAddMinutes value={addMinutes} onChange={setAddMinutes} disabled={busy} />
         ) : null}
         {chosen ? (
           <CorrectionsOptions value={corrections} onChange={setCorrections} disabled={busy} />

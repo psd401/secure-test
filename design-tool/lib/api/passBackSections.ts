@@ -13,7 +13,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { attempts, type AssessmentRow } from "@/db/schema";
 import type { getDb } from "@/db/client";
-import { attemptIsTimed } from "@/lib/api/attemptDeadline";
+import { reopenNeedsEndTime } from "@/lib/api/attemptDeadline";
 import { buildResults } from "@/lib/scoring/results";
 import { NO_SECTION } from "@/lib/scoring/sectionFilter";
 
@@ -23,7 +23,7 @@ export interface SectionPassBackTargets {
   /** The Results filter's value: a section label, or `NO_SECTION`. */
   section: string;
   attempt_ids: string[];
-  /** Any of them needs a new deadline (`attemptIsTimed`). */
+  /** Any of them needs a new deadline (`reopenNeedsEndTime`). */
   timed: boolean;
 }
 
@@ -49,7 +49,7 @@ export async function sectionPassBackTargets(
         ),
       ),
     );
-  const timedIds = new Set(rows.filter((a) => attemptIsTimed(a, assessment)).map((a) => a.id));
+  const timedIds = new Set(rows.filter((a) => reopenNeedsEndTime(a, assessment)).map((a) => a.id));
 
   const bySection = new Map<string, SectionPassBackTargets>();
   for (const r of submitted) {

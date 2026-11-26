@@ -27,7 +27,7 @@ import {
   type TestSessionRow,
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
-import { attemptIsTimed, deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
+import { reopenNeedsEndTime, deadlineFor, isPastDeadline, workingTimeLeft } from "@/lib/api/attemptDeadline";
 import { studentsInTeachersSections } from "@/lib/roster/queries";
 import { sectionLabel, studentDisplayName } from "@/lib/roster/teacherRoster";
 import { inStudentOption, optionByStudent } from "@/lib/competency/studentItems";
@@ -107,6 +107,10 @@ export interface AttendanceRow {
    * time limit" — the Monitor says so where it would otherwise show the
    * deadline. False on every other row, submitted ones included. */
   time_limit_removed: boolean;
+  /** Working-time clock (docs/working-time-clock-design.md, D5): seconds of
+   * the limit used and left, for a joined in-progress attempt on a
+   * working-time test. Null on every other row. */
+  working_time: { used_seconds: number; left_seconds: number } | null;
   /** Slice 91: the newest client-reported event, whatever its kind. Null on a
    * `submitted_earlier` row: its events belong to the earlier sitting. */
   last_event: AttendanceEvent | null;
@@ -340,7 +344,14 @@ export async function attendanceForSitting(
   // asks directly, rather than through `deadlineFor` — a limit on the
   // assessment OR an override already on the attempt, regardless of status.
   const timedOf = (hit: (typeof joined)[number]) =>
-    attemptIsTimed(hit.attempt, timeLimit);
+    reopenNeedsEndTime(hit.attempt, timeLimit);
+  // Working-time clock (D5): minutes used and left, in progress only — the
+  // same rule `deadline_at` follows. Whole seconds; the Monitor rounds.
+  const workingOf = (hit: (typeof joined)[number]) => {
+    if (hit.attempt.status !== "in_progress") return null;
+    const w = workingTimeLeft(hit.attempt, timeLimit, now);
+    return w ? { used_seconds: Math.floor(w.used), left_seconds: Math.ceil(w.left) } : null;
+  };
   // Remove time limit (2026-09-24): shown only while the attempt is still in
   // progress, the same rule `deadline_at` follows.
   const removedOf = (hit: (typeof joined)[number]) =>
@@ -479,6 +490,7 @@ export async function attendanceForSitting(
       timed: hit ? timedOf(hit) : earlier ? timedOf(earlier) : false,
       passed_back_waiting: !hit && passedBackWaiting.has(psId),
       time_limit_removed: hit ? removedOf(hit) : false,
+      working_time: hit ? workingOf(hit) : null,
       speech_to_text_unavailable: hit ? speechUnavailable.has(hit.attempt.id) : false,
     });
   }
@@ -503,6 +515,7 @@ export async function attendanceForSitting(
       timed: timedOf(hit),
       passed_back_waiting: false,
       time_limit_removed: removedOf(hit),
+      working_time: workingOf(hit),
       speech_to_text_unavailable: speechUnavailable.has(hit.attempt.id),
     });
   }
@@ -536,6 +549,7 @@ export async function attendanceForSitting(
         timed: false,
         passed_back_waiting: false,
         time_limit_removed: false,
+        working_time: null,
         speech_to_text_unavailable: false,
       });
     }

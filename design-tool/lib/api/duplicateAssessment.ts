@@ -91,6 +91,7 @@ export async function duplicateAssessment(
     .set({
       description: source.description,
       time_limit_seconds: source.time_limit_seconds,
+      time_limit_mode: source.time_limit_mode,
       allow_clipboard: source.allow_clipboard,
       allow_llm_authoring: source.allow_llm_authoring,
       section_accommodations: source.section_accommodations,

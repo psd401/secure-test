@@ -292,7 +292,7 @@ describe("POST /api/assessments/[id]/pass-back", () => {
 
   test("the deadline goes only to the timed attempts", async () => {
     // Untimed assessment; the second attempt carries a hand-granted extension,
-    // which makes it timed (attemptIsTimed) and so requires a deadline.
+    // which makes it timed (reopenNeedsEndTime) and so requires a deadline.
     const a = await seed({ attempts: [{}, { overrideMinutesAgo: 10 }] });
     expect((await passBackAll(a.assessment.id, a.attempts.map((x) => x.id))).status).toBe(400);
 
