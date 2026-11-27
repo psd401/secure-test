@@ -80,6 +80,19 @@ export async function POST(req: Request) {
     );
   }
 
+  // Substitute access is deferred (docs/access-model-design.md D-5, James
+  // 2026-11-26). A `teacher`-scoped grant resolves today, and the results
+  // surfaces ask only for `view`, which every level includes, so a `run`
+  // grant meant for a substitute would open that teacher's student results.
+  // Until the covering path (D-5's "Monitor only") is built, this route makes
+  // none; an admin covers a class with Act as instead.
+  if (body.scope_kind === "teacher") {
+    return NextResponse.json(
+      { ok: false, error: "teacher_scope_disabled" },
+      { status: 400 },
+    );
+  }
+
   const checked = validateGrantRequest({
     granter: auth.session,
     grantee_email: body.grantee_email,

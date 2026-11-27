@@ -325,26 +325,45 @@ describe("/api/grants is the admin surface", () => {
     expect(await getDb().select().from(access_grants)).toEqual([]);
   });
 
-  test("an admin creates a teacher-scoped run grant and reads it back", async () => {
+  test("an admin cannot create a teacher-scoped grant at any level (D-5 deferred)", async () => {
+    process.env.ADMIN_EMAILS = ADMIN.email;
+    asUser(ADMIN);
+    const { POST } = await adminGrantsRoute();
+    const ends = new Date(Date.now() + 86_400_000).toISOString();
+    for (const level of ["view", "run", "score", "edit"] as const) {
+      const res = await POST(
+        post("http://localhost/api/grants", {
+          grantee_email: CO_EMAIL,
+          scope_kind: "teacher",
+          scope_id: OWNER.email,
+          level,
+          ends_at: ends,
+          note: "sub for tomorrow",
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ ok: false, error: "teacher_scope_disabled" });
+    }
+    expect(await getDb().select().from(access_grants)).toEqual([]);
+  });
+
+  test("an admin creates an assessment-scoped grant and reads it back", async () => {
     process.env.ADMIN_EMAILS = `someone.else@psd401.net,${ADMIN.email}`;
     asUser(ADMIN);
     const { GET, POST } = await adminGrantsRoute();
-    const ends = new Date(Date.now() + 86_400_000).toISOString();
+    const scopeId = "00000000-0000-4000-8000-000000000001";
     const res = await POST(
       post("http://localhost/api/grants", {
-        grantee_email: CO_EMAIL,
-        scope_kind: "teacher",
-        scope_id: ` ${OWNER.email!.toUpperCase()} `,
-        level: "run",
-        ends_at: ends,
-        note: "sub for tomorrow",
+        grantee_email: ` ${CO_EMAIL.toUpperCase()} `,
+        scope_kind: "assessment",
+        scope_id: scopeId,
+        level: "edit",
       }),
     );
     expect(res.status).toBe(201);
     const payload = (await res.json()) as { grant: Record<string, unknown> };
-    // The teacher scope is normalised on the way in, or resolution would miss it.
-    expect(payload.grant.scope_id).toBe(OWNER.email);
-    expect(payload.grant.level).toBe("run");
+    expect(payload.grant.grantee_email).toBe(CO_EMAIL);
+    expect(payload.grant.level).toBe("edit");
 
     const byGrantee = (await (
       await GET(new Request(`http://localhost/api/grants?grantee=${CO_EMAIL}`))
@@ -353,9 +372,7 @@ describe("/api/grants is the admin surface", () => {
 
     const byScope = (await (
       await GET(
-        new Request(
-          `http://localhost/api/grants?scope_kind=teacher&scope_id=${OWNER.email}`,
-        ),
+        new Request(`http://localhost/api/grants?scope_kind=assessment&scope_id=${scopeId}`),
       )
     ).json()) as { grants: unknown[] };
     expect(byScope.grants).toHaveLength(1);

@@ -280,8 +280,10 @@ check and adds the test that keeps it that way.
   test; assessments made before the OE-1 fix (2026-10-23) have no
   `owner_email`, so a teacher-scope grant does not reach them until the
   owner next opens them; (5) open: whether district substitutes sign in
-  with `psd401.net` accounts. Until (1) is fixed, do not make a
-  `teacher`-scope `run` grant through `/api/grants`.
+  with `psd401.net` accounts. Until (1) is fixed, `POST /api/grants`
+  refuses every `teacher`-scope grant (400 `teacher_scope_disabled`, added
+  2026-11-26); lift that guard in the same change that builds the covering
+  path. Grants already in the table still resolve.
 - **D-6** Admin reads everything; admin writes outside the admin surface
   go through impersonation. — **DECIDED as recommended (James, 2026-09-17)**
   **Enforced in `lib/api/access.ts` 2026-10-25** (security audit 2026-10-24,
